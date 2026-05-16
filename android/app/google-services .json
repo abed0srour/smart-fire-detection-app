@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "966501029115",
+    "project_id": "mobile-iot-project",
+    "storage_bucket": "mobile-iot-project.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:966501029115:android:ff455931d0db6d7d710c5e",
+        "android_client_info": {
+          "package_name": "com.example.fire_detector_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCXeVYjzDJG0Oz32y_91VZZxNOWB4JTNE0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
