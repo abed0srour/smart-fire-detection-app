@@ -39,8 +39,10 @@ flutter run --dart-define=BACKEND_BASE_URL=http://10.0.2.2:5000
 You can also override the Firebase web API key and device code:
 
 ```powershell
-flutter run --dart-define=FIREBASE_API_KEY=your_key --dart-define=DEVICE_ID=SD-2024-001-A
+flutter run --dart-define=FIREBASE_API_KEY=your_key --dart-define=DEVICE_ID=MASTER_ROOM
 ```
+
+The checked-in Wokwi simulator sends two device codes: `MASTER_ROOM` and `BEDROOM_1`. After signing in, the app provisions those rooms/devices for the current backend user so `POST /api/sensors` can accept the ESP32 readings.
 
 ## Development
 

@@ -182,12 +182,12 @@ class _AlertScreenState extends State<AlertScreen>
           const SizedBox(height: 16),
           _buildReadingRow(
             'Smoke Level',
-            '${sensorData.smokeLevel.toStringAsFixed(1)}%',
+            '${sensorData.smokeLevel.toStringAsFixed(1)} ppm',
             Colors.deepOrange,
           ),
           const SizedBox(height: 16),
           _buildReadingRow(
-            'CO Level',
+            'CO2 Level',
             '${sensorData.coLevel.toStringAsFixed(1)} ppm',
             const Color(0xFFA78BFA),
           ),

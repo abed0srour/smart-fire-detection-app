@@ -17,14 +17,14 @@ class AppSettings {
     required this.updatedAt,
   });
 
-  factory AppSettings.defaults({String deviceId = 'SD-2024-001-A'}) {
+  factory AppSettings.defaults({String deviceId = 'MASTER_ROOM'}) {
     return AppSettings(
       deviceId: deviceId,
       emergencyPhoneNumber: '+1-911-EMERGENCY',
       autoEmergencyCall: true,
       notificationsEnabled: true,
-      temperatureThreshold: 40,
-      smokeThreshold: 70,
+      temperatureThreshold: 50,
+      smokeThreshold: 3000,
       updatedAt: DateTime.now(),
     );
   }
@@ -39,8 +39,8 @@ class AppSettings {
           map['emergencyPhoneNumber']?.toString() ?? '+1-911-EMERGENCY',
       autoEmergencyCall: _boolFromBackend(map['autoEmergencyCall'], true),
       notificationsEnabled: _boolFromBackend(map['notificationsEnabled'], true),
-      temperatureThreshold: _doubleFromBackend(map['temperatureThreshold'], 40),
-      smokeThreshold: _doubleFromBackend(map['smokeThreshold'], 70),
+      temperatureThreshold: _doubleFromBackend(map['temperatureThreshold'], 50),
+      smokeThreshold: _doubleFromBackend(map['smokeThreshold'], 3000),
       updatedAt: _dateTimeFromBackend(map['updatedAt']),
     );
   }

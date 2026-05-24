@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:smart_fire_detection_app/src/data/services/auth_session_storage.dart';
 import 'package:smart_fire_detection_app/src/data/services/backend_service.dart';
 import 'package:smart_fire_detection_app/src/data/services/remote_backend_service.dart';
 
@@ -41,6 +43,31 @@ class AuthSession {
       expiresAt: expiresAt ?? this.expiresAt,
     );
   }
+
+  Map<String, Object?> toMap() {
+    return {
+      'idToken': idToken,
+      'refreshToken': refreshToken,
+      'localId': localId,
+      'email': email,
+      'expiresAt': expiresAt.toIso8601String(),
+    };
+  }
+
+  factory AuthSession.fromMap(Map<String, dynamic> map) {
+    final expiresAt = DateTime.tryParse(map['expiresAt']?.toString() ?? '');
+    if (expiresAt == null) {
+      throw const AuthException('Stored session is invalid.');
+    }
+
+    return AuthSession(
+      idToken: map['idToken']?.toString() ?? '',
+      refreshToken: map['refreshToken']?.toString() ?? '',
+      localId: map['localId']?.toString() ?? '',
+      email: map['email']?.toString() ?? '',
+      expiresAt: expiresAt,
+    );
+  }
 }
 
 class AuthService {
@@ -48,11 +75,14 @@ class AuthService {
     required this.firebaseApiKey,
     required this.backendBaseUrl,
     http.Client? client,
-  }) : _client = client ?? http.Client();
+    AuthSessionStorage? sessionStorage,
+  }) : _client = client ?? http.Client(),
+       _sessionStorage = sessionStorage ?? createAuthSessionStorage();
 
   final String firebaseApiKey;
   final String backendBaseUrl;
   final http.Client _client;
+  final AuthSessionStorage _sessionStorage;
 
   Future<AuthSession> signUp({
     required String email,
@@ -103,6 +133,53 @@ class AuthService {
       localId: body['user_id']?.toString(),
       expiresAt: DateTime.now().add(Duration(seconds: expiresIn)),
     );
+  }
+
+  Future<void> saveSession(AuthSession session) async {
+    await _sessionStorage.write(jsonEncode(session.toMap()));
+  }
+
+  Future<AuthSession?> restoreSession() async {
+    final rawSession = await _sessionStorage.read();
+    if (rawSession == null || rawSession.isEmpty) {
+      return null;
+    }
+
+    try {
+      final decoded = jsonDecode(rawSession);
+      if (decoded is! Map) {
+        throw const AuthException('Stored session is invalid.');
+      }
+
+      var session = AuthSession.fromMap(
+        decoded.map((key, value) => MapEntry(key.toString(), value)),
+      );
+
+      if (session.refreshToken.isEmpty) {
+        throw const AuthException('Stored session is missing a refresh token.');
+      }
+
+      if (session.idToken.isEmpty || session.shouldRefresh) {
+        try {
+          session = await refreshSession(session);
+          await saveSession(session);
+        } on AuthException {
+          await clearSession();
+          return null;
+        } catch (_) {
+          return session;
+        }
+      }
+
+      return session;
+    } catch (_) {
+      await clearSession();
+      return null;
+    }
+  }
+
+  Future<void> clearSession() async {
+    await _sessionStorage.clear();
   }
 
   Future<void> saveProfile({
@@ -226,15 +303,18 @@ enum AuthStatus { signedOut, loading, signedIn }
 
 class AuthController extends ChangeNotifier {
   AuthController({required AuthService authService, required this.deviceId})
-    : _authService = authService;
+    : _authService = authService {
+    unawaited(_restoreSession());
+  }
 
   final AuthService _authService;
   final String deviceId;
 
   AuthSession? _session;
   RemoteBackendService? _backend;
-  AuthStatus _status = AuthStatus.signedOut;
+  AuthStatus _status = AuthStatus.loading;
   String? _errorMessage;
+  bool _isDisposed = false;
 
   AuthStatus get status => _status;
   bool get isLoading => _status == AuthStatus.loading;
@@ -260,6 +340,7 @@ class AuthController extends ChangeNotifier {
         phone: phone,
         address: address,
       );
+      await _authService.saveSession(session);
       _activate(session);
     });
   }
@@ -276,6 +357,7 @@ class AuthController extends ChangeNotifier {
           'No backend profile was found. Create an account first.',
         );
       }
+      await _authService.saveSession(session);
       _activate(session);
     });
   }
@@ -286,28 +368,70 @@ class AuthController extends ChangeNotifier {
       throw AuthException('You are not signed in.');
     }
 
-    if (!current.shouldRefresh) {
+    if (current.idToken.isNotEmpty && !current.shouldRefresh) {
       return current.idToken;
     }
 
     final refreshed = await _authService.refreshSession(current);
     _session = refreshed;
+    await _authService.saveSession(refreshed);
     return refreshed.idToken;
   }
 
   void signOut() {
+    unawaited(_authService.clearSession());
     _backend?.close();
     _backend = null;
     _session = null;
     _status = AuthStatus.signedOut;
     _errorMessage = null;
-    notifyListeners();
+    _notify();
+  }
+
+  Future<void> _restoreSession() async {
+    try {
+      final session = await _authService.restoreSession();
+      if (session == null) {
+        _status = AuthStatus.signedOut;
+        _errorMessage = null;
+        _notify();
+        return;
+      }
+
+      Map<String, dynamic>? profile;
+      try {
+        profile = await _authService.getProfile(session);
+      } on BackendException {
+        profile = const <String, dynamic>{};
+      }
+
+      if (profile == null) {
+        await _authService.clearSession();
+        _status = AuthStatus.signedOut;
+        _errorMessage = null;
+        _notify();
+        return;
+      }
+
+      _activate(session);
+      _status = AuthStatus.signedIn;
+      _errorMessage = null;
+    } catch (_) {
+      await _authService.clearSession();
+      _backend?.close();
+      _backend = null;
+      _session = null;
+      _status = AuthStatus.signedOut;
+      _errorMessage = null;
+    }
+
+    _notify();
   }
 
   Future<void> _runAuthAction(Future<void> Function() action) async {
     _status = AuthStatus.loading;
     _errorMessage = null;
-    notifyListeners();
+    _notify();
 
     try {
       await action();
@@ -323,7 +447,7 @@ class AuthController extends ChangeNotifier {
       _errorMessage = 'Unable to authenticate. Check backend and network.';
     }
 
-    notifyListeners();
+    _notify();
   }
 
   void _activate(AuthSession session) {
@@ -338,8 +462,15 @@ class AuthController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _isDisposed = true;
     _backend?.close();
     super.dispose();
+  }
+
+  void _notify() {
+    if (!_isDisposed) {
+      notifyListeners();
+    }
   }
 }
 

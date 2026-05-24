@@ -12,7 +12,7 @@ class SensorData {
   final DateTime lastUpdated;
 
   const SensorData({
-    this.deviceId = 'SD-2024-001-A',
+    this.deviceId = 'MASTER_ROOM',
     required this.temperature,
     required this.smokeLevel,
     required this.riskLevel,
@@ -35,10 +35,10 @@ class SensorData {
     return SensorData(
       deviceId:
           deviceId ??
-          device?['deviceId']?.toString() ??
           device?['deviceCode']?.toString() ??
+          device?['deviceId']?.toString() ??
           map['deviceId']?.toString() ??
-          'SD-2024-001-A',
+          'MASTER_ROOM',
       temperature: _doubleFromBackend(map['temperature'], 0),
       smokeLevel: _doubleFromBackend(map['smokeLevel'], 0),
       humidity: _doubleFromBackend(map['humidity'], 0),
@@ -177,7 +177,7 @@ class AlertHistory {
 
   const AlertHistory({
     this.id = '',
-    this.deviceId = 'SD-2024-001-A',
+    this.deviceId = 'MASTER_ROOM',
     required this.timestamp,
     required this.temperature,
     required this.smokeLevel,
@@ -204,10 +204,10 @@ class AlertHistory {
       id: id ?? map['id']?.toString() ?? map['_id']?.toString() ?? '',
       deviceId:
           deviceId ??
-          device?['deviceId']?.toString() ??
           device?['deviceCode']?.toString() ??
+          device?['deviceId']?.toString() ??
           map['deviceId']?.toString() ??
-          'SD-2024-001-A',
+          'MASTER_ROOM',
       timestamp: _dateTimeFromBackend(
         map['timestamp'] ?? map['createdAt'] ?? map['updatedAt'],
       ),
@@ -259,12 +259,12 @@ Map<String, dynamic>? _mapFromBackend(Object? value) {
   return null;
 }
 
-/// Local data provider used until the Laravel API is connected.
+/// Local data provider used when the remote API is not connected.
 class LocalDataProvider {
   // Current sensor data
   static SensorData getCurrentSensorData() {
     return SensorData(
-      deviceId: 'SD-2024-001-A',
+      deviceId: 'MASTER_ROOM',
       temperature: 28.5,
       smokeLevel: 15.0,
       humidity: 45.0,

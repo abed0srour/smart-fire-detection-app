@@ -23,6 +23,14 @@ abstract class BackendService {
     String? deviceCode,
   });
 
+  Future<RoomOverview> updateRoom({
+    required String roomId,
+    required String name,
+    String? location,
+  });
+
+  Future<void> deleteRoom(String roomId);
+
   Future<void> saveSettings(AppSettings settings);
 
   Future<void> requestEmergencyCall({String source = 'app'});

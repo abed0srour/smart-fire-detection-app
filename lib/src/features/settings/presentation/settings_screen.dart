@@ -23,8 +23,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   bool autoEmergencyCall = true;
   bool notificationsEnabled = true;
-  double temperatureThreshold = 40;
-  double smokeThreshold = 70;
+  double temperatureThreshold = 50;
+  double smokeThreshold = 3000;
   bool _isSaving = false;
   bool _hasLoadedSettings = false;
   String? _loadError;
@@ -120,11 +120,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 subtitle:
                     'Automatically call emergency services on fire detection',
                 value: autoEmergencyCall,
-                onChanged: (value) {
-                  setState(() {
-                    autoEmergencyCall = value;
-                  });
-                },
+                onChanged: _isSaving
+                    ? null
+                    : (value) => _updateToggleSetting(
+                        backend,
+                        autoEmergencyCallValue: value,
+                      ),
               ),
               const SizedBox(height: 24),
               _buildSectionHeader('Notification settings'),
@@ -133,11 +134,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 title: 'Enable Notifications',
                 subtitle: 'Receive alerts and status updates',
                 value: notificationsEnabled,
-                onChanged: (value) {
-                  setState(() {
-                    notificationsEnabled = value;
-                  });
-                },
+                onChanged: _isSaving
+                    ? null
+                    : (value) => _updateToggleSetting(
+                        backend,
+                        notificationsEnabledValue: value,
+                      ),
               ),
               const SizedBox(height: 24),
               _buildSectionHeader('Sensor thresholds'),
@@ -158,9 +160,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               _buildThresholdCard(
                 title: 'Smoke Level Threshold',
                 value: smokeThreshold,
-                unit: '%',
-                min: 30,
-                max: 100,
+                unit: ' ppm',
+                min: 500,
+                max: 4095,
                 onChanged: (value) {
                   setState(() {
                     smokeThreshold = value;
@@ -273,7 +275,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     required String title,
     required String subtitle,
     required bool value,
-    required ValueChanged<bool> onChanged,
+    required ValueChanged<bool>? onChanged,
   }) {
     return _buildSettingCard(
       child: Row(
@@ -548,6 +550,56 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  Future<void> _updateToggleSetting(
+    BackendService backend, {
+    bool? autoEmergencyCallValue,
+    bool? notificationsEnabledValue,
+  }) async {
+    final previousAutoEmergencyCall = autoEmergencyCall;
+    final previousNotificationsEnabled = notificationsEnabled;
+
+    setState(() {
+      _isSaving = true;
+      autoEmergencyCall = autoEmergencyCallValue ?? autoEmergencyCall;
+      notificationsEnabled = notificationsEnabledValue ?? notificationsEnabled;
+    });
+
+    try {
+      await backend.saveSettings(_draftSettings(backend));
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Setting updated'),
+          backgroundColor: AppColors.primary,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        autoEmergencyCall = previousAutoEmergencyCall;
+        notificationsEnabled = previousNotificationsEnabled;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Unable to update setting'),
+          backgroundColor: AppColors.danger,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
+  }
+
   Future<void> _resetSettings(BackendService backend) async {
     final defaults = AppSettings.defaults(deviceId: backend.deviceId);
     setState(() {
@@ -634,7 +686,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         content: Text(
           backend.isRemoteBackend
               ? 'Connected to ${backend.backendName} for device ${backend.deviceId}.'
-              : 'Using local in-app data. Add a Laravel API service when the backend is ready.',
+              : 'Using local in-app data. Sign in to connect to the Node API backend.',
           style: const TextStyle(color: AppColors.textSecondary),
         ),
         actions: [

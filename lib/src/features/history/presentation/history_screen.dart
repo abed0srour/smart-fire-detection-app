@@ -183,7 +183,7 @@ class HistoryScreen extends StatelessWidget {
                     _buildSensorChip(
                       icon: Icons.cloud,
                       color: AppColors.textSecondary,
-                      value: '${alert.smokeLevel.toStringAsFixed(1)}%',
+                      value: '${alert.smokeLevel.toStringAsFixed(1)} ppm',
                     ),
                     const SizedBox(width: 8),
                     _buildSensorChip(
@@ -281,11 +281,11 @@ class HistoryScreen extends StatelessWidget {
             ),
             _buildDetailRow(
               'Smoke Level',
-              '${alert.smokeLevel.toStringAsFixed(1)}%',
+              '${alert.smokeLevel.toStringAsFixed(1)} ppm',
               AppColors.textSecondary,
             ),
             _buildDetailRow(
-              'CO Level',
+              'CO2 Level',
               '${alert.coLevel.toStringAsFixed(1)} ppm',
               const Color(0xFFA78BFA),
             ),

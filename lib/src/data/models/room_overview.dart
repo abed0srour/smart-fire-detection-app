@@ -102,6 +102,7 @@ class RoomDevice {
     final id = map['_id']?.toString() ?? map['id']?.toString() ?? '';
     final deviceCode =
         map['deviceCode']?.toString() ?? map['deviceId']?.toString() ?? id;
+    final readingMap = _mapFromBackend(map['latestReading']);
 
     return RoomDevice(
       id: id,
@@ -116,7 +117,11 @@ class RoomDevice {
       batteryLevel: _doubleFromBackend(map['batteryLevel'], 0),
       alarmMuted: _boolFromBackend(map['alarmMuted'], false),
       lastSeen: _dateTimeFromBackendOrNull(map['lastSeen']),
-      latestReading: latestReading,
+      latestReading:
+          latestReading ??
+          (readingMap == null
+              ? null
+              : SensorData.fromMap(readingMap, deviceId: deviceCode)),
     );
   }
 

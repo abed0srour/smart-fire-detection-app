@@ -1,5 +1,10 @@
 const User = require("../models/User");
 const Room = require("../models/Room");
+const Device = require("../models/Device");
+const SensorReading = require("../models/SensorReading");
+const Alert = require("../models/Alert");
+const ThresholdSetting = require("../models/ThresholdSetting");
+const MaintenanceReminder = require("../models/MaintenanceReminder");
 const { emitToUser } = require("../realtime/socket");
 
 const getCurrentUser = async (firebaseUid) => {
@@ -75,6 +80,17 @@ const deleteRoom = async (req, res) => {
     });
 
     if (room) {
+      const devices = await Device.find({ roomId: room._id }).select("_id");
+      const deviceIds = devices.map((device) => device._id);
+
+      await Promise.all([
+        Device.deleteMany({ roomId: room._id }),
+        SensorReading.deleteMany({ deviceId: { $in: deviceIds } }),
+        Alert.deleteMany({ roomId: room._id }),
+        ThresholdSetting.deleteMany({ roomId: room._id }),
+        MaintenanceReminder.deleteMany({ deviceId: { $in: deviceIds } }),
+      ]);
+
       emitToUser(user._id, "rooms:changed", {
         action: "room_deleted",
         roomId: room._id.toString(),

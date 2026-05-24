@@ -1,5 +1,6 @@
 const User = require("../models/User");
 const Device = require("../models/Device");
+const SensorReading = require("../models/SensorReading");
 const { emitToUser } = require("../realtime/socket");
 
 const getCurrentUser = async (firebaseUid) => {
@@ -57,7 +58,28 @@ const getMyDevices = async (req, res) => {
       .populate("roomId")
       .sort({ createdAt: -1 });
 
-    res.json({ success: true, data: devices });
+    const deviceIds = devices.map((device) => device._id);
+    const readings = await SensorReading.find({ deviceId: { $in: deviceIds } })
+      .populate("deviceId")
+      .sort({ createdAt: -1 });
+    const latestReadingByDevice = new Map();
+
+    readings.forEach((reading) => {
+      const id =
+        reading.deviceId?._id?.toString() ?? reading.deviceId?.toString();
+      if (id && !latestReadingByDevice.has(id)) {
+        latestReadingByDevice.set(id, reading);
+      }
+    });
+
+    const data = devices.map((device) => {
+      const item = device.toObject();
+      item.latestReading =
+        latestReadingByDevice.get(device._id.toString()) ?? null;
+      return item;
+    });
+
+    res.json({ success: true, data });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

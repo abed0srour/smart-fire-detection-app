@@ -15,7 +15,7 @@ class BackendBootstrap {
 
   static const String deviceId = String.fromEnvironment(
     'DEVICE_ID',
-    defaultValue: 'SD-2024-001-A',
+    defaultValue: 'MASTER_ROOM',
   );
 
   static AuthService createAuthService() {

@@ -21,27 +21,27 @@ const thresholdSettingSchema = new mongoose.Schema(
 
     temperatureDanger: {
       type: Number,
-      default: 60,
+      default: 50,
     },
 
     smokeWarning: {
       type: Number,
-      default: 40,
+      default: 1800,
     },
 
     smokeDanger: {
       type: Number,
-      default: 70,
+      default: 3000,
     },
 
     co2Warning: {
       type: Number,
-      default: 700,
+      default: 1800,
     },
 
     co2Danger: {
       type: Number,
-      default: 1000,
+      default: 3000,
     },
   },
   { timestamps: true }

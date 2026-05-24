@@ -6,7 +6,7 @@ import 'package:smart_fire_detection_app/src/data/models/sensor_data.dart';
 import 'package:smart_fire_detection_app/src/data/services/backend_service.dart';
 
 class LocalBackendService implements BackendService {
-  LocalBackendService({this.deviceId = 'SD-2024-001-A'}) {
+  LocalBackendService({this.deviceId = 'MASTER_ROOM'}) {
     _sensorData = LocalDataProvider.getCurrentSensorData().copyWith(
       deviceId: deviceId,
     );
@@ -73,7 +73,7 @@ class LocalBackendService implements BackendService {
     final index = _rooms.length;
     final resolvedDeviceCode = (deviceCode == null || deviceCode.trim().isEmpty)
         ? 'LOCAL-ROOM-${index + 1}'
-        : deviceCode.trim();
+        : deviceCode.trim().toUpperCase();
     final reading = _sampleSensorData(
       deviceCode: resolvedDeviceCode,
       index: index,
@@ -91,6 +91,35 @@ class LocalBackendService implements BackendService {
     _rooms = [room, ..._rooms];
     _roomsController.add(_rooms);
     return room;
+  }
+
+  @override
+  Future<RoomOverview> updateRoom({
+    required String roomId,
+    required String name,
+    String? location,
+  }) async {
+    final trimmedName = name.trim();
+    final index = _rooms.indexWhere((room) => room.id == roomId);
+    if (index == -1) {
+      throw Exception('Room not found');
+    }
+
+    final room = _rooms[index].copyWith(
+      name: trimmedName.isEmpty ? _rooms[index].name : trimmedName,
+      location: location?.trim() ?? _rooms[index].location,
+    );
+    _rooms = [
+      for (var i = 0; i < _rooms.length; i++) i == index ? room : _rooms[i],
+    ];
+    _roomsController.add(_rooms);
+    return room;
+  }
+
+  @override
+  Future<void> deleteRoom(String roomId) async {
+    _rooms = _rooms.where((room) => room.id != roomId).toList();
+    _roomsController.add(_rooms);
   }
 
   @override

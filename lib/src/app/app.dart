@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:smart_fire_detection_app/src/app/app_colors.dart';
+import 'package:smart_fire_detection_app/src/data/models/sensor_data.dart';
 import 'package:smart_fire_detection_app/src/data/services/auth_service.dart';
 import 'package:smart_fire_detection_app/src/data/services/backend_bootstrap.dart';
 import 'package:smart_fire_detection_app/src/data/services/backend_service.dart';
@@ -240,6 +243,10 @@ class MainShell extends StatefulWidget {
 
 class _MainShellState extends State<MainShell> {
   int _currentIndex = 0;
+  BackendService? _alertBackend;
+  StreamSubscription<SensorData>? _criticalAlertSubscription;
+  bool _criticalAlertActive = false;
+  String? _activeCriticalDeviceId;
 
   final List<Widget> _screens = const [
     DashboardScreen(),
@@ -248,6 +255,30 @@ class _MainShellState extends State<MainShell> {
     HistoryScreen(),
     SettingsScreen(),
   ];
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final backend = context.read<BackendService>();
+    if (_alertBackend == backend) {
+      return;
+    }
+
+    _criticalAlertSubscription?.cancel();
+    _alertBackend = backend;
+    _criticalAlertActive = false;
+    _activeCriticalDeviceId = null;
+    _criticalAlertSubscription = backend.watchCurrentSensorData().listen(
+      _handleCriticalSensorData,
+      onError: (_) {},
+    );
+  }
+
+  @override
+  void dispose() {
+    _criticalAlertSubscription?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -262,5 +293,81 @@ class _MainShellState extends State<MainShell> {
         },
       ),
     );
+  }
+
+  void _handleCriticalSensorData(SensorData sensorData) {
+    final isCritical =
+        sensorData.riskLevel == RiskLevel.fire ||
+        sensorData.riskLevel == RiskLevel.high;
+
+    if (!isCritical) {
+      _clearCriticalAlert();
+      return;
+    }
+
+    if (_criticalAlertActive &&
+        _activeCriticalDeviceId == sensorData.deviceId) {
+      return;
+    }
+
+    _criticalAlertActive = true;
+    _activeCriticalDeviceId = sensorData.deviceId;
+    _showCriticalAlert(sensorData);
+  }
+
+  void _clearCriticalAlert() {
+    if (!_criticalAlertActive) {
+      return;
+    }
+
+    _criticalAlertActive = false;
+    _activeCriticalDeviceId = null;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentMaterialBanner();
+      }
+    });
+  }
+
+  void _showCriticalAlert(SensorData sensorData) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+
+      if (_currentIndex != 2) {
+        setState(() {
+          _currentIndex = 2;
+        });
+      }
+
+      final messenger = ScaffoldMessenger.of(context);
+      messenger.hideCurrentMaterialBanner();
+      messenger.showMaterialBanner(
+        MaterialBanner(
+          backgroundColor: AppColors.danger,
+          leading: const Icon(Icons.local_fire_department, color: Colors.white),
+          content: Text(
+            'Critical fire alert from ${sensorData.deviceId}',
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => messenger.hideCurrentMaterialBanner(),
+              child: const Text(
+                'DISMISS',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    });
   }
 }

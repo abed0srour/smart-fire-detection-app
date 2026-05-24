@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:socket_io_client/socket_io_client.dart' as io;
 import 'package:smart_fire_detection_app/src/data/models/room_overview.dart';
@@ -10,13 +11,26 @@ import 'package:smart_fire_detection_app/src/data/services/backend_service.dart'
 
 typedef TokenProvider = Future<String> Function();
 
+const List<_CircuitDeviceDefinition> _circuitDeviceDefinitions = [
+  _CircuitDeviceDefinition(
+    deviceCode: 'MASTER_ROOM',
+    roomName: 'Master Room',
+    roomLocation: 'Room 1',
+  ),
+  _CircuitDeviceDefinition(
+    deviceCode: 'BEDROOM_1',
+    roomName: 'Bedroom',
+    roomLocation: 'Room 2',
+  ),
+];
+
 class RemoteBackendService implements BackendService {
   RemoteBackendService({
     required String baseUrl,
     required this.deviceId,
     required TokenProvider tokenProvider,
     http.Client? client,
-    this.pollInterval = const Duration(seconds: 5),
+    this.pollInterval = const Duration(seconds: 30),
   }) : baseUrl = _normalizeBaseUrl(baseUrl),
        _tokenProvider = tokenProvider,
        _client = client ?? http.Client();
@@ -74,13 +88,18 @@ class RemoteBackendService implements BackendService {
   SensorData? _cachedSensorData;
   List<AlertHistory>? _cachedAlertHistory;
   List<RoomOverview>? _cachedRoomOverviews;
+  final Map<String, SensorData> _latestSensorDataByDevice =
+      <String, SensorData>{};
 
   io.Socket? _socket;
   Future<void>? _socketStart;
   Future<void>? _sensorLoad;
   Future<void>? _alertHistoryLoad;
   Future<void>? _roomsLoad;
+  Timer? _sensorPollTimer;
+  Timer? _roomsPollTimer;
   int _alertHistoryLimit = 0;
+  bool _socketConnected = false;
   bool _isClosed = false;
 
   @override
@@ -101,6 +120,7 @@ class RemoteBackendService implements BackendService {
   @override
   Stream<SensorData> watchCurrentSensorData() {
     _startRealtime();
+    _startSensorPolling();
     unawaited(_loadCurrentSensorData());
     return _sensorStream;
   }
@@ -124,6 +144,7 @@ class RemoteBackendService implements BackendService {
   @override
   Stream<List<RoomOverview>> watchRoomOverviews() {
     _startRealtime();
+    _startRoomsPolling();
     unawaited(_loadRoomOverviews());
     return _roomOverviewStream;
   }
@@ -142,10 +163,10 @@ class RemoteBackendService implements BackendService {
       ),
     );
     final room = RoomOverview.fromMap(createdRoom ?? <String, dynamic>{});
-    final trimmedDeviceCode = deviceCode?.trim();
+    final trimmedDeviceCode = deviceCode?.trim().toUpperCase();
 
     if (trimmedDeviceCode == null || trimmedDeviceCode.isEmpty) {
-      unawaited(_loadRoomOverviews(force: true));
+      await _loadRoomOverviews(force: true);
       return room;
     }
 
@@ -164,10 +185,10 @@ class RemoteBackendService implements BackendService {
         ),
       );
       final device = RoomDevice.fromMap(createdDevice ?? <String, dynamic>{});
-      unawaited(_loadRoomOverviews(force: true));
+      await _loadRoomOverviews(force: true);
       return room.copyWith(devices: [device]);
     } on RemoteBackendException catch (error) {
-      unawaited(_loadRoomOverviews(force: true));
+      await _loadRoomOverviews(force: true);
       throw RemoteBackendException(
         'Room created, but device could not be attached: ${error.message}',
       );
@@ -175,25 +196,69 @@ class RemoteBackendService implements BackendService {
   }
 
   @override
+  Future<RoomOverview> updateRoom({
+    required String roomId,
+    required String name,
+    String? location,
+  }) async {
+    final updatedRoom = RoomOverview.fromMap(
+      _asMap(
+            await _request(
+              method: 'PUT',
+              path: '/api/rooms/$roomId',
+              body: {'name': name.trim(), 'location': location?.trim() ?? ''},
+            ),
+          ) ??
+          <String, dynamic>{},
+    );
+
+    _cachedRoom = null;
+    await _loadRoomOverviews(force: true);
+    return updatedRoom;
+  }
+
+  @override
+  Future<void> deleteRoom(String roomId) async {
+    await _request(method: 'DELETE', path: '/api/rooms/$roomId');
+    if (_cachedRoom?.id == roomId) {
+      _cachedRoom = null;
+      _cachedDevice = null;
+      _cachedSensorData = null;
+    }
+    await _loadRoomOverviews(force: true);
+  }
+
+  @override
   Future<void> saveSettings(AppSettings settings) async {
-    final room = await _primaryRoom();
     final dangerTemperature = settings.temperatureThreshold;
     final warningTemperature = (dangerTemperature - 10)
         .clamp(0, 100)
         .toDouble();
     final dangerSmoke = settings.smokeThreshold;
-    final warningSmoke = (dangerSmoke * 0.6).clamp(0, 100).toDouble();
+    final warningSmoke = (dangerSmoke * 0.6).clamp(0, 4095).toDouble();
+    await _fetchBackendDevices();
+    var rooms = await _fetchBackendRooms();
 
-    await _request(
-      method: 'POST',
-      path: '/api/thresholds',
-      body: {
-        'roomId': room.id,
-        'temperatureWarning': warningTemperature,
-        'temperatureDanger': dangerTemperature,
-        'smokeWarning': warningSmoke,
-        'smokeDanger': dangerSmoke,
-      },
+    if (rooms.isEmpty) {
+      rooms = [await _primaryRoom()];
+    }
+
+    await Future.wait(
+      rooms.map((room) {
+        return _request(
+          method: 'POST',
+          path: '/api/thresholds',
+          body: {
+            'roomId': room.id,
+            'temperatureWarning': warningTemperature,
+            'temperatureDanger': dangerTemperature,
+            'smokeWarning': warningSmoke,
+            'smokeDanger': dangerSmoke,
+            'co2Warning': warningSmoke,
+            'co2Danger': dangerSmoke,
+          },
+        );
+      }),
     );
 
     await _saveEmergencyPhone(settings.emergencyPhoneNumber);
@@ -237,6 +302,7 @@ class RemoteBackendService implements BackendService {
     _cachedSensorData = null;
     _cachedAlertHistory = null;
     _cachedRoomOverviews = null;
+    _latestSensorDataByDevice.clear();
     await Future.wait([
       _loadCurrentSensorData(force: true),
       _loadAlertHistory(force: true),
@@ -249,6 +315,8 @@ class RemoteBackendService implements BackendService {
 
   void close() {
     _isClosed = true;
+    _sensorPollTimer?.cancel();
+    _roomsPollTimer?.cancel();
     _socket?.dispose();
     _sensorController.close();
     _alertHistoryController.close();
@@ -284,6 +352,47 @@ class RemoteBackendService implements BackendService {
     unawaited(_socketStart!);
   }
 
+  void _startSensorPolling() {
+    if (_isClosed ||
+        _sensorPollTimer != null ||
+        pollInterval.inMilliseconds <= 0) {
+      return;
+    }
+
+    _sensorPollTimer = Timer.periodic(pollInterval, (_) {
+      if (_socketConnected) {
+        return;
+      }
+
+      unawaited(_loadCurrentSensorData(force: true));
+    });
+  }
+
+  void _startRoomsPolling() {
+    if (_isClosed ||
+        _roomsPollTimer != null ||
+        pollInterval.inMilliseconds <= 0) {
+      return;
+    }
+
+    _roomsPollTimer = Timer.periodic(pollInterval, (_) {
+      if (_socketConnected) {
+        return;
+      }
+
+      unawaited(_loadRoomOverviews(force: true));
+    });
+  }
+
+  void _loadFallbackSnapshots() {
+    if (_sensorPollTimer != null) {
+      unawaited(_loadCurrentSensorData(force: true));
+    }
+    if (_roomsPollTimer != null) {
+      unawaited(_loadRoomOverviews(force: true));
+    }
+  }
+
   Future<void> _connectSocket() async {
     try {
       final socket = io.io(
@@ -306,6 +415,14 @@ class RemoteBackendService implements BackendService {
       }
 
       _socket = socket;
+      socket.onConnect((_) {
+        _socketConnected = true;
+        _loadFallbackSnapshots();
+      });
+      socket.onDisconnect((_) {
+        _socketConnected = false;
+        _loadFallbackSnapshots();
+      });
       socket.on('sensor:reading', _handleSensorReading);
       socket.on('alert:created', _handleAlertCreated);
       socket.on('device:updated', _handleDeviceUpdated);
@@ -314,10 +431,14 @@ class RemoteBackendService implements BackendService {
         (_) => unawaited(_loadRoomOverviews(force: true)),
       );
       socket.onConnectError((error) {
+        _socketConnected = false;
         _socketStart = null;
         _addRealtimeError(error);
       });
-      socket.onError((error) => _addRealtimeError(error));
+      socket.onError((error) {
+        _socketConnected = false;
+        _addRealtimeError(error);
+      });
       socket.connect();
     } catch (error, stackTrace) {
       _socket = null;
@@ -436,6 +557,7 @@ class RemoteBackendService implements BackendService {
       return;
     }
 
+    _cacheSensorData(sensorData);
     _cachedSensorData = sensorData;
     _sensorController.add(sensorData);
   }
@@ -454,8 +576,64 @@ class RemoteBackendService implements BackendService {
       return;
     }
 
+    _syncLatestReadingsFromRooms(roomOverviews);
+    final selectedSensorData = _selectedCurrentSensorData();
+    if (selectedSensorData != null) {
+      _cachedSensorData = selectedSensorData;
+      _sensorController.add(selectedSensorData);
+    }
+
     _cachedRoomOverviews = roomOverviews;
     _roomsController.add(roomOverviews);
+  }
+
+  void _cacheSensorData(SensorData sensorData) {
+    if (sensorData.deviceId.isEmpty) {
+      return;
+    }
+
+    _latestSensorDataByDevice[sensorData.deviceId] = sensorData;
+  }
+
+  void _syncLatestReadingsFromRooms(List<RoomOverview> roomOverviews) {
+    final activeDeviceIds = <String>{};
+
+    for (final room in roomOverviews) {
+      for (final device in room.devices) {
+        activeDeviceIds.add(device.deviceCode);
+        final reading = device.latestReading;
+        if (reading != null) {
+          _cacheSensorData(reading);
+        }
+      }
+    }
+
+    _latestSensorDataByDevice.removeWhere(
+      (deviceId, _) => !activeDeviceIds.contains(deviceId),
+    );
+  }
+
+  SensorData? _selectedCurrentSensorData() {
+    SensorData? selected;
+
+    for (final reading in _latestSensorDataByDevice.values) {
+      if (selected == null || _readingOutranks(reading, selected)) {
+        selected = reading;
+      }
+    }
+
+    return selected;
+  }
+
+  bool _readingOutranks(SensorData candidate, SensorData current) {
+    final candidateRisk = _riskWeight(candidate.riskLevel);
+    final currentRisk = _riskWeight(current.riskLevel);
+
+    if (candidateRisk != currentRisk) {
+      return candidateRisk > currentRisk;
+    }
+
+    return candidate.lastUpdated.isAfter(current.lastUpdated);
   }
 
   void _handleSensorReading(Object? payload) {
@@ -475,7 +653,9 @@ class RemoteBackendService implements BackendService {
           payloadMap?['deviceCode']?.toString() ?? _deviceCode(readingMap),
     );
 
-    _setCurrentSensorData(sensorData);
+    _logSensorValues('realtime parsed sensor values', sensorData);
+    _cacheSensorData(sensorData);
+    _setCurrentSensorData(_selectedCurrentSensorData() ?? sensorData);
     _applySensorReadingToRooms(sensorData);
   }
 
@@ -629,27 +809,173 @@ class RemoteBackendService implements BackendService {
   }
 
   Future<SensorData> _fetchCurrentSensorData() async {
-    final stats = await _request(method: 'GET', path: '/api/dashboard/stats');
-    final statsMap = _asMap(stats);
-    final latestReading = _asMap(statsMap?['latestReading']);
-
-    if (latestReading != null) {
-      return SensorData.fromMap(
-        latestReading,
-        deviceId: _deviceCode(latestReading),
-      );
+    final devices = await _fetchBackendDevices();
+    if (devices.isEmpty) {
+      final device = await _primaryDevice();
+      final sensorData = _emptySensorDataForDevice(device);
+      _logSensorValues('parsed empty sensor values', sensorData);
+      return sensorData;
     }
 
-    final device = await _primaryDevice();
-    final latest = await _request(
-      method: 'GET',
-      path: '/api/sensors/latest/${device.id}',
+    final readings = await Future.wait(devices.map(_fetchLatestSensorData));
+    for (final reading in readings.whereType<SensorData>()) {
+      _cacheSensorData(reading);
+    }
+
+    final selected = _selectedCurrentSensorData();
+    if (selected != null) {
+      _logSensorValues('parsed selected sensor values', selected);
+      return selected;
+    }
+
+    final primaryDevice = _selectPrimaryDevice(devices) ?? devices.first;
+    final sensorData = _emptySensorDataForDevice(primaryDevice);
+    _logSensorValues('parsed empty sensor values', sensorData);
+    return sensorData;
+  }
+
+  Future<List<_BackendDevice>> _fetchBackendDevices() async {
+    var devices = await _readBackendDevices();
+
+    if (await _ensureCircuitDevices(devices)) {
+      devices = await _readBackendDevices();
+    }
+
+    final primaryDevice = _selectPrimaryDevice(devices);
+    if (primaryDevice != null) {
+      _cachedDevice = primaryDevice;
+    }
+
+    return devices;
+  }
+
+  Future<List<_BackendDevice>> _readBackendDevices() async {
+    return _asList(await _request(method: 'GET', path: '/api/devices'))
+        .map(
+          (item) => _BackendDevice.fromMap(_asMap(item) ?? <String, dynamic>{}),
+        )
+        .where((device) => device.id.isNotEmpty)
+        .toList();
+  }
+
+  Future<bool> _ensureCircuitDevices(List<_BackendDevice> devices) async {
+    final shouldProvision = _circuitDeviceDefinitions.any(
+      (definition) => definition.deviceCode == deviceId,
     );
-    final latestMap = _asMap(latest);
-    if (latestMap != null) {
-      return SensorData.fromMap(latestMap, deviceId: device.code);
+
+    if (!shouldProvision) {
+      return false;
     }
 
+    final missingDefinitions = _circuitDeviceDefinitions.where((definition) {
+      return !devices.any(
+        (device) => device.matchesCode(definition.deviceCode),
+      );
+    }).toList();
+
+    if (missingDefinitions.isEmpty) {
+      return false;
+    }
+
+    var rooms = await _fetchBackendRooms();
+    var changed = false;
+
+    for (final definition in missingDefinitions) {
+      var room = _findBackendRoom(rooms, definition.roomName);
+
+      if (room == null) {
+        room = await _createBackendRoom(definition);
+        rooms = [room, ...rooms];
+      }
+
+      try {
+        await _request(
+          method: 'POST',
+          path: '/api/devices',
+          body: {
+            'roomId': room.id,
+            'deviceId': definition.deviceCode,
+            'deviceCode': definition.deviceCode,
+            'name': '${definition.roomName} Detector',
+            'batteryLevel': 100,
+          },
+        );
+        changed = true;
+      } on RemoteBackendException catch (error) {
+        if (!_isDuplicateDeviceError(error)) {
+          rethrow;
+        }
+        changed = true;
+      }
+    }
+
+    return changed;
+  }
+
+  Future<List<_BackendRoom>> _fetchBackendRooms() async {
+    final rooms = _asList(await _request(method: 'GET', path: '/api/rooms'))
+        .map(
+          (item) => _BackendRoom.fromMap(_asMap(item) ?? <String, dynamic>{}),
+        )
+        .where((room) => room.id.isNotEmpty)
+        .toList();
+
+    if (rooms.isNotEmpty) {
+      _cachedRoom ??= rooms.first;
+    }
+
+    return rooms;
+  }
+
+  Future<_BackendRoom> _createBackendRoom(
+    _CircuitDeviceDefinition definition,
+  ) async {
+    final created = await _request(
+      method: 'POST',
+      path: '/api/rooms',
+      body: {'name': definition.roomName, 'location': definition.roomLocation},
+    );
+    return _BackendRoom.fromMap(_asMap(created) ?? <String, dynamic>{});
+  }
+
+  _BackendRoom? _findBackendRoom(List<_BackendRoom> rooms, String name) {
+    for (final room in rooms) {
+      if (room.name.toLowerCase() == name.toLowerCase()) {
+        return room;
+      }
+    }
+
+    return null;
+  }
+
+  bool _isDuplicateDeviceError(RemoteBackendException error) {
+    final message = error.message.toLowerCase();
+    return message.contains('duplicate') || message.contains('e11000');
+  }
+
+  _BackendDevice? _selectPrimaryDevice(List<_BackendDevice> devices) {
+    for (final device in devices) {
+      if (device.matchesCode(deviceId)) {
+        return device;
+      }
+    }
+
+    return devices.isEmpty ? null : devices.first;
+  }
+
+  Future<SensorData?> _fetchLatestSensorData(_BackendDevice device) async {
+    final latestMap = _asMap(
+      await _request(method: 'GET', path: '/api/sensors/latest/${device.id}'),
+    );
+
+    if (latestMap == null || latestMap.isEmpty) {
+      return null;
+    }
+
+    return SensorData.fromMap(latestMap, deviceId: device.code);
+  }
+
+  SensorData _emptySensorDataForDevice(_BackendDevice device) {
     return SensorData(
       deviceId: device.code,
       temperature: 0,
@@ -705,16 +1031,18 @@ class RemoteBackendService implements BackendService {
       notificationsEnabled: true,
       temperatureThreshold: _doubleFromBackend(
         threshold?['temperatureDanger'],
-        40,
+        50,
       ),
       smokeThreshold: _normalizeSmokeThreshold(
-        _doubleFromBackend(threshold?['smokeDanger'], 70),
+        _doubleFromBackend(threshold?['smokeDanger'], 3000),
       ),
       updatedAt: _dateTimeFromBackend(threshold?['updatedAt']),
     );
   }
 
   Future<List<RoomOverview>> _fetchRoomOverviews() async {
+    await _fetchBackendDevices();
+
     final rooms = _asList(await _request(method: 'GET', path: '/api/rooms'))
         .map((item) {
           return RoomOverview.fromMap(_asMap(item) ?? <String, dynamic>{});
@@ -739,7 +1067,7 @@ class RemoteBackendService implements BackendService {
   Future<RoomDevice> _roomDeviceWithLatestReading(Object? item) async {
     final device = RoomDevice.fromMap(_asMap(item) ?? <String, dynamic>{});
 
-    if (device.id.isEmpty) {
+    if (device.id.isEmpty || device.latestReading != null) {
       return device;
     }
 
@@ -765,19 +1093,16 @@ class RemoteBackendService implements BackendService {
       return cached;
     }
 
-    final rooms = _asList(await _request(method: 'GET', path: '/api/rooms'));
+    final rooms = await _fetchBackendRooms();
     if (rooms.isNotEmpty) {
-      final room = _BackendRoom.fromMap(
-        _asMap(rooms.first) ?? <String, dynamic>{},
-      );
-      _cachedRoom = room;
-      return room;
+      _cachedRoom = rooms.first;
+      return rooms.first;
     }
 
     final created = await _request(
       method: 'POST',
       path: '/api/rooms',
-      body: {'name': 'Main Room', 'location': 'Default'},
+      body: {'name': 'Master Room', 'location': 'Room 1'},
     );
     final room = _BackendRoom.fromMap(_asMap(created) ?? <String, dynamic>{});
     _cachedRoom = room;
@@ -790,20 +1115,21 @@ class RemoteBackendService implements BackendService {
       return cached;
     }
 
-    final devices = _asList(
-      await _request(method: 'GET', path: '/api/devices'),
-    );
-    if (devices.isNotEmpty) {
-      final mappedDevices = devices
-          .map(
-            (item) =>
-                _BackendDevice.fromMap(_asMap(item) ?? <String, dynamic>{}),
-          )
-          .toList();
-      final matched = mappedDevices.where((device) => device.code == deviceId);
-      final device = matched.isEmpty ? mappedDevices.first : matched.first;
-      _cachedDevice = device;
-      return device;
+    final mappedDevices = await _fetchBackendDevices();
+    if (mappedDevices.isNotEmpty) {
+      final matched = mappedDevices.where((device) {
+        return device.matchesCode(deviceId);
+      });
+      if (matched.isNotEmpty) {
+        final device = matched.first;
+        _cachedDevice = device;
+        return device;
+      }
+
+      debugPrint(
+        '[RemoteBackendService] no device found for code=$deviceId; '
+        'creating it for the primary room',
+      );
     }
 
     final room = await _primaryRoom();
@@ -820,6 +1146,10 @@ class RemoteBackendService implements BackendService {
     );
     final device = _BackendDevice.fromMap(
       _asMap(created) ?? <String, dynamic>{},
+    );
+    debugPrint(
+      '[RemoteBackendService] created device id=${device.id}, '
+      'code=${device.code}',
     );
     _cachedDevice = device;
     return device;
@@ -890,6 +1220,8 @@ class RemoteBackendService implements BackendService {
     final headers = {
       'Accept': 'application/json',
       'Content-Type': 'application/json',
+      'Cache-Control': 'no-cache',
+      'Pragma': 'no-cache',
       'Authorization': 'Bearer $token',
     };
     final encodedBody = body == null ? null : jsonEncode(body);
@@ -926,14 +1258,28 @@ class RemoteBackendException implements Exception {
   String toString() => message;
 }
 
+class _CircuitDeviceDefinition {
+  const _CircuitDeviceDefinition({
+    required this.deviceCode,
+    required this.roomName,
+    required this.roomLocation,
+  });
+
+  final String deviceCode;
+  final String roomName;
+  final String roomLocation;
+}
+
 class _BackendRoom {
-  const _BackendRoom({required this.id});
+  const _BackendRoom({required this.id, required this.name});
 
   final String id;
+  final String name;
 
   factory _BackendRoom.fromMap(Map<String, dynamic> map) {
     return _BackendRoom(
       id: map['_id']?.toString() ?? map['id']?.toString() ?? '',
+      name: map['name']?.toString() ?? '',
     );
   }
 }
@@ -959,14 +1305,18 @@ class _BackendDevice {
     return _BackendDevice(
       id: map['_id']?.toString() ?? map['id']?.toString() ?? '',
       code:
-          map['deviceId']?.toString() ??
           map['deviceCode']?.toString() ??
-          'SD-2024-001-A',
+          map['deviceId']?.toString() ??
+          'MASTER_ROOM',
       batteryLevel: _doubleFromBackend(map['batteryLevel'], 0),
       isOnline: _boolFromBackend(map['isOnline'], false),
       alarmMuted: _boolFromBackend(map['alarmMuted'], false),
       lastSeen: _dateTimeFromBackendOrNull(map['lastSeen']),
     );
+  }
+
+  bool matchesCode(String value) {
+    return code == value || id == value;
   }
 
   _BackendDevice copyWith({bool? alarmMuted}) {
@@ -1021,7 +1371,20 @@ List<Object?> _asList(Object? value) {
 
 String? _deviceCode(Map<String, dynamic> reading) {
   final device = _asMap(reading['deviceId']);
-  return device?['deviceId']?.toString() ?? device?['deviceCode']?.toString();
+  return device?['deviceCode']?.toString() ?? device?['deviceId']?.toString();
+}
+
+void _logSensorValues(String message, SensorData sensorData) {
+  debugPrint(
+    '[RemoteBackendService] $message: '
+    'deviceId=${sensorData.deviceId}, '
+    'temperature=${sensorData.temperature}, '
+    'smokeLevel=${sensorData.smokeLevel}, '
+    'humidity=${sensorData.humidity}, '
+    'co2Level=${sensorData.coLevel}, '
+    'riskLevel=${sensorData.riskLevel.backendValue}, '
+    'lastUpdated=${sensorData.lastUpdated.toIso8601String()}',
+  );
 }
 
 bool _boolFromBackend(Object? value, bool fallback) {
@@ -1045,10 +1408,23 @@ double _doubleFromBackend(Object? value, double fallback) {
 }
 
 double _normalizeSmokeThreshold(double value) {
-  if (value > 100) {
-    return value / 10;
+  if (value >= 0 && value <= 100) {
+    return (value / 100) * 4095;
   }
   return value;
+}
+
+int _riskWeight(RiskLevel riskLevel) {
+  switch (riskLevel) {
+    case RiskLevel.low:
+      return 0;
+    case RiskLevel.medium:
+      return 1;
+    case RiskLevel.high:
+      return 2;
+    case RiskLevel.fire:
+      return 3;
+  }
 }
 
 DateTime _dateTimeFromBackend(Object? value) {

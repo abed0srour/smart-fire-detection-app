@@ -132,7 +132,7 @@ const requestEmergencyCall = async (req, res) => {
     }
 
     if (!device) {
-      const fallbackDeviceId = deviceCode || "SD-2024-001-A";
+      const fallbackDeviceId = deviceCode || "MASTER_ROOM";
       device = await Device.create({
         userId: user._id,
         roomId: room._id,

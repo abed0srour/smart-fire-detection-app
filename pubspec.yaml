@@ -1,5 +1,5 @@
 name: smart_fire_detection_app
-description: Flutter smart fire detection monitor ready for a Laravel backend.
+description: Flutter smart fire detection monitor for a Node.js backend.
 publish_to: 'none'
 version: 1.0.0+1
 

@@ -62,11 +62,7 @@ class DashboardScreen extends StatelessWidget {
 
           return RefreshIndicator(
             onRefresh: () async {
-              if (backend.isRemoteBackend) {
-                await Future<void>.delayed(const Duration(milliseconds: 300));
-              } else {
-                await backend.resetLocalData();
-              }
+              await backend.resetLocalData();
             },
             color: AppColors.primary,
             backgroundColor: AppColors.surface,
@@ -270,7 +266,7 @@ class DashboardScreen extends StatelessWidget {
         SensorCard(
           title: 'Smoke Level',
           value: sensorData.smokeLevel.toStringAsFixed(1),
-          unit: '%',
+          unit: 'ppm',
           icon: Icons.cloud,
           accentColor: AppColors.textSecondary,
         ),
@@ -282,7 +278,7 @@ class DashboardScreen extends StatelessWidget {
           accentColor: Colors.cyanAccent,
         ),
         SensorCard(
-          title: 'CO Level',
+          title: 'CO2 Level',
           value: sensorData.coLevel.toStringAsFixed(1),
           unit: 'ppm',
           icon: Icons.science,

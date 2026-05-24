@@ -18,6 +18,11 @@ const sensorReadingSchema = new mongoose.Schema(
       required: true,
     },
 
+    humidity: {
+      type: Number,
+      default: 0,
+    },
+
     co2Level: {
       type: Number,
       required: true,

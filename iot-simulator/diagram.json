@@ -1,0 +1,135 @@
+{
+  "version": 1,
+  "author": "Abed",
+  "editor": "wokwi",
+  "parts": [
+    {
+      "type": "board-esp32-devkit-c-v4",
+      "id": "esp",
+      "top": 120,
+      "left": 360,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-dht22",
+      "id": "dht_room1",
+      "top": 20,
+      "left": 20,
+      "attrs": {
+        "temperature": "25",
+        "humidity": "45"
+      }
+    },
+    {
+      "type": "wokwi-gas-sensor",
+      "id": "mq_room1",
+      "top": 200,
+      "left": 20,
+      "attrs": {
+        "ppm": "300"
+      }
+    },
+    {
+      "type": "wokwi-slide-switch",
+      "id": "flame_room1",
+      "top": 370,
+      "left": 60,
+      "attrs": {
+        "label": "Master Room",
+        "bounce": "0"
+      }
+    },
+    {
+      "type": "wokwi-dht22",
+      "id": "dht_room2",
+      "top": 20,
+      "left": 720,
+      "attrs": {
+        "temperature": "25",
+        "humidity": "45"
+      }
+    },
+    {
+      "type": "wokwi-gas-sensor",
+      "id": "mq_room2",
+      "top": 200,
+      "left": 720,
+      "attrs": {
+        "ppm": "300"
+      }
+    },
+    {
+      "type": "wokwi-slide-switch",
+      "id": "flame_room2",
+      "top": 370,
+      "left": 760,
+      "attrs": {
+        "label": "Bedroom",
+        "bounce": "0"
+      }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "green_led",
+      "top": 500,
+      "left": 300,
+      "attrs": {
+        "color": "green"
+      }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "red_led",
+      "top": 500,
+      "left": 430,
+      "attrs": {
+        "color": "red"
+      }
+    },
+    {
+      "type": "wokwi-buzzer",
+      "id": "buzzer",
+      "top": 500,
+      "left": 570,
+      "attrs": {}
+    }
+  ],
+  "connections": [
+    [ "esp:TX", "$serialMonitor:RX", "", [] ],
+    [ "esp:RX", "$serialMonitor:TX", "", [] ],
+
+    [ "dht_room1:VCC", "esp:3V3", "red" ],
+    [ "dht_room1:SDA", "esp:15", "green" ],
+    [ "dht_room1:GND", "esp:GND.1", "black" ],
+
+    [ "mq_room1:VCC", "esp:3V3", "red" ],
+    [ "mq_room1:GND", "esp:GND.2", "black" ],
+    [ "mq_room1:AOUT", "esp:34", "blue" ],
+
+    [ "flame_room1:1", "esp:GND.3", "black" ],
+    [ "flame_room1:2", "esp:4", "green" ],
+    [ "flame_room1:3", "esp:3V3", "red" ],
+
+    [ "dht_room2:VCC", "esp:3V3", "red" ],
+    [ "dht_room2:SDA", "esp:16", "green" ],
+    [ "dht_room2:GND", "esp:GND.4", "black" ],
+
+    [ "mq_room2:VCC", "esp:3V3", "red" ],
+    [ "mq_room2:GND", "esp:GND.5", "black" ],
+    [ "mq_room2:AOUT", "esp:35", "blue" ],
+
+    [ "flame_room2:1", "esp:GND.6", "black" ],
+    [ "flame_room2:2", "esp:18", "green" ],
+    [ "flame_room2:3", "esp:3V3", "red" ],
+
+    [ "green_led:A", "esp:2", "green" ],
+    [ "green_led:C", "esp:GND.7", "black" ],
+
+    [ "red_led:A", "esp:5", "red" ],
+    [ "red_led:C", "esp:GND.8", "black" ],
+
+    [ "buzzer:1", "esp:19", "yellow" ],
+    [ "buzzer:2", "esp:GND.9", "black" ]
+  ],
+  "dependencies": {}
+}

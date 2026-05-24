@@ -8,9 +8,9 @@ const calculateStatus = (sensorData, thresholds) => {
 
   if (
     flameDetected === true ||
-    temperature >= thresholds.temperatureDanger ||
-    smokeLevel >= thresholds.smokeDanger ||
-    co2Level >= thresholds.co2Danger
+    temperature > thresholds.temperatureDanger ||
+    smokeLevel > thresholds.smokeDanger ||
+    co2Level > thresholds.co2Danger
   ) {
     return "danger";
   }

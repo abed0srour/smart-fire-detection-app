@@ -90,7 +90,8 @@ class _RoomsScreenState extends State<RoomsScreen> {
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.fromLTRB(20, 20, 20, 96),
               itemCount: rooms.length,
-              itemBuilder: (context, index) => _buildRoomCard(rooms[index]),
+              itemBuilder: (context, index) =>
+                  _buildRoomCard(backend, rooms[index]),
             ),
           );
         },
@@ -139,7 +140,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
     );
   }
 
-  Widget _buildRoomCard(RoomOverview room) {
+  Widget _buildRoomCard(BackendService backend, RoomOverview room) {
     final reading = room.currentReading;
     final color = _riskColor(room.riskLevel);
     final onlineDevices = room.devices
@@ -197,10 +198,18 @@ class _RoomsScreenState extends State<RoomsScreen> {
               ),
               const SizedBox(width: 10),
               _buildRiskBadge(room.riskLevel),
+              const SizedBox(width: 4),
+              IconButton(
+                tooltip: 'Manage room',
+                icon: const Icon(Icons.tune, color: AppColors.textMuted),
+                onPressed: () => _showManageRoomDialog(backend, room),
+              ),
             ],
           ),
           const SizedBox(height: 16),
           _buildRoomSummary(room, onlineDevices),
+          const SizedBox(height: 12),
+          _buildManageRoomButton(backend, room),
           const SizedBox(height: 16),
           if (reading == null)
             _buildNoReadingPanel(room)
@@ -210,6 +219,26 @@ class _RoomsScreenState extends State<RoomsScreen> {
             _buildReadingFooter(reading),
           ],
         ],
+      ),
+    );
+  }
+
+  Widget _buildManageRoomButton(BackendService backend, RoomOverview room) {
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: () => _showManageRoomDialog(backend, room),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppColors.primary,
+          side: BorderSide(color: AppColors.primary.withValues(alpha: 0.55)),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+        icon: const Icon(Icons.tune, size: 18),
+        label: const Text(
+          'MANAGE ROOM',
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
+        ),
       ),
     );
   }
@@ -344,7 +373,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
         icon: Icons.cloud,
         label: 'Smoke',
         value: reading.smokeLevel.toStringAsFixed(1),
-        unit: '%',
+        unit: 'ppm',
         color: AppColors.textSecondary,
       ),
       _RoomMetric(
@@ -356,7 +385,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
       ),
       _RoomMetric(
         icon: Icons.science,
-        label: 'CO',
+        label: 'CO2',
         value: reading.coLevel.toStringAsFixed(1),
         unit: 'ppm',
         color: const Color(0xFFA78BFA),
@@ -699,6 +728,327 @@ class _RoomsScreenState extends State<RoomsScreen> {
     nameController.dispose();
     locationController.dispose();
     deviceCodeController.dispose();
+  }
+
+  Future<void> _showManageRoomDialog(
+    BackendService backend,
+    RoomOverview room,
+  ) async {
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    final formKey = GlobalKey<FormState>();
+    final nameController = TextEditingController(text: room.name);
+    final locationController = TextEditingController(text: room.location);
+    var isSaving = false;
+    String? errorMessage;
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              backgroundColor: AppColors.surface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              title: Row(
+                children: [
+                  const Icon(Icons.tune, color: AppColors.primary),
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: Text(
+                      'Manage Room',
+                      style: TextStyle(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Delete room',
+                    onPressed: isSaving
+                        ? null
+                        : () async {
+                            final shouldDelete = await _confirmDeleteRoom(
+                              dialogContext,
+                              room.name,
+                            );
+                            if (!shouldDelete) {
+                              return;
+                            }
+
+                            setDialogState(() {
+                              isSaving = true;
+                              errorMessage = null;
+                            });
+
+                            try {
+                              await backend.deleteRoom(room.id);
+                              if (!dialogContext.mounted) {
+                                return;
+                              }
+                              Navigator.pop(dialogContext);
+                              await _reloadRooms(backend);
+                              if (!mounted) {
+                                return;
+                              }
+                              scaffoldMessenger.showSnackBar(
+                                SnackBar(
+                                  content: const Text('Room deleted'),
+                                  backgroundColor: AppColors.danger,
+                                  behavior: SnackBarBehavior.floating,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                ),
+                              );
+                            } catch (error) {
+                              setDialogState(() {
+                                isSaving = false;
+                                errorMessage = error.toString();
+                              });
+                            }
+                          },
+                    icon: const Icon(
+                      Icons.delete_outline,
+                      color: AppColors.danger,
+                    ),
+                  ),
+                ],
+              ),
+              content: Form(
+                key: formKey,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (errorMessage != null) ...[
+                        _buildDialogError(errorMessage!),
+                        const SizedBox(height: 12),
+                      ],
+                      TextFormField(
+                        controller: nameController,
+                        enabled: !isSaving,
+                        autofocus: true,
+                        style: const TextStyle(color: AppColors.textPrimary),
+                        decoration: const InputDecoration(
+                          labelText: 'Room name',
+                          prefixIcon: Icon(Icons.meeting_room_outlined),
+                        ),
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Required';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: locationController,
+                        enabled: !isSaving,
+                        style: const TextStyle(color: AppColors.textPrimary),
+                        decoration: const InputDecoration(
+                          labelText: 'Location',
+                          prefixIcon: Icon(Icons.location_on_outlined),
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      Text(
+                        'Devices',
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          color: AppColors.textSecondary,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      if (room.devices.isEmpty)
+                        _buildDeviceEmptyState()
+                      else
+                        ...room.devices.map(_buildManageDeviceRow),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isSaving
+                      ? null
+                      : () => Navigator.pop(dialogContext),
+                  child: const Text('Close'),
+                ),
+                ElevatedButton.icon(
+                  onPressed: isSaving
+                      ? null
+                      : () async {
+                          final form = formKey.currentState;
+                          if (form == null || !form.validate()) {
+                            return;
+                          }
+
+                          setDialogState(() {
+                            isSaving = true;
+                            errorMessage = null;
+                          });
+
+                          try {
+                            await backend.updateRoom(
+                              roomId: room.id,
+                              name: nameController.text,
+                              location: locationController.text,
+                            );
+                            if (!dialogContext.mounted) {
+                              return;
+                            }
+                            Navigator.pop(dialogContext);
+                            await _reloadRooms(backend);
+                            if (!mounted) {
+                              return;
+                            }
+                            scaffoldMessenger.showSnackBar(
+                              SnackBar(
+                                content: const Text('Room updated'),
+                                backgroundColor: AppColors.primary,
+                                behavior: SnackBarBehavior.floating,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                              ),
+                            );
+                          } catch (error) {
+                            setDialogState(() {
+                              isSaving = false;
+                              errorMessage = error.toString();
+                            });
+                          }
+                        },
+                  icon: isSaving
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.save_outlined),
+                  label: Text(isSaving ? 'SAVING' : 'SAVE'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    nameController.dispose();
+    locationController.dispose();
+  }
+
+  Future<bool> _confirmDeleteRoom(BuildContext context, String roomName) async {
+    return await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            backgroundColor: AppColors.surface,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+            title: const Text(
+              'Delete Room',
+              style: TextStyle(
+                color: AppColors.danger,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            content: Text(
+              'Delete "$roomName" and its device readings?',
+              style: const TextStyle(color: AppColors.textSecondary),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.danger,
+                ),
+                onPressed: () => Navigator.pop(dialogContext, true),
+                icon: const Icon(Icons.delete_outline),
+                label: const Text('DELETE'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+  }
+
+  Widget _buildDeviceEmptyState() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceHigh,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: const Text(
+        'No devices attached',
+        style: TextStyle(color: AppColors.textMuted, fontSize: 13),
+      ),
+    );
+  }
+
+  Widget _buildManageDeviceRow(RoomDevice device) {
+    final statusColor = device.isOnline ? AppColors.success : AppColors.danger;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceHigh,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.sensors, color: statusColor, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  device.deviceCode,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  device.name,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.textMuted,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            device.isOnline ? 'ONLINE' : 'OFFLINE',
+            style: TextStyle(
+              color: statusColor,
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildDialogError(String message) {
