@@ -284,6 +284,22 @@ class DashboardScreen extends StatelessWidget {
           icon: Icons.science,
           accentColor: const Color(0xFFA78BFA),
         ),
+        SensorCard(
+          title: 'Light Level',
+          value: sensorData.lightLevel.toStringAsFixed(0),
+          unit: 'lux',
+          icon: Icons.light_mode,
+          accentColor: AppColors.warning,
+        ),
+        SensorCard(
+          title: 'Flame',
+          value: sensorData.flameDetected ? 'YES' : 'NO',
+          unit: sensorData.flameLevel.toStringAsFixed(0),
+          icon: Icons.local_fire_department,
+          accentColor: sensorData.flameDetected
+              ? AppColors.danger
+              : AppColors.success,
+        ),
       ],
     );
   }

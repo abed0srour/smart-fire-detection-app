@@ -5,8 +5,11 @@ class SensorData {
   final double smokeLevel;
   final double humidity;
   final double coLevel;
+  final double lightLevel;
+  final double flameLevel;
   final double batteryLevel;
   final RiskLevel riskLevel;
+  final bool flameDetected;
   final bool isConnected;
   final bool alarmMuted;
   final DateTime lastUpdated;
@@ -20,16 +23,20 @@ class SensorData {
     required this.lastUpdated,
     this.humidity = 0,
     this.coLevel = 0,
+    this.lightLevel = 0,
+    this.flameLevel = 0,
     this.batteryLevel = 0,
+    this.flameDetected = false,
     this.alarmMuted = false,
   });
 
   factory SensorData.fromMap(Map<String, dynamic> map, {String? deviceId}) {
     final device = _mapFromBackend(map['deviceId']);
+    final flameDetected = _boolFromBackend(map['flameDetected'], false);
     final status = map['riskLevel'] ?? map['status'];
     final riskLevel = riskLevelFromBackend(
       status,
-      flameDetected: _boolFromBackend(map['flameDetected'], false),
+      flameDetected: flameDetected,
     );
 
     return SensorData(
@@ -43,11 +50,14 @@ class SensorData {
       smokeLevel: _doubleFromBackend(map['smokeLevel'], 0),
       humidity: _doubleFromBackend(map['humidity'], 0),
       coLevel: _doubleFromBackend(map['coLevel'] ?? map['co2Level'], 0),
+      lightLevel: _doubleFromBackend(map['lightLevel'], 0),
+      flameLevel: _doubleFromBackend(map['flameLevel'], 0),
       batteryLevel: _doubleFromBackend(
         map['batteryLevel'] ?? device?['batteryLevel'],
         0,
       ),
       riskLevel: riskLevel,
+      flameDetected: flameDetected,
       isConnected: _boolFromBackend(
         map['isConnected'] ?? map['isOnline'] ?? device?['isOnline'],
         false,
@@ -71,8 +81,11 @@ class SensorData {
     double? smokeLevel,
     double? humidity,
     double? coLevel,
+    double? lightLevel,
+    double? flameLevel,
     double? batteryLevel,
     RiskLevel? riskLevel,
+    bool? flameDetected,
     bool? isConnected,
     bool? alarmMuted,
     DateTime? lastUpdated,
@@ -83,8 +96,11 @@ class SensorData {
       smokeLevel: smokeLevel ?? this.smokeLevel,
       humidity: humidity ?? this.humidity,
       coLevel: coLevel ?? this.coLevel,
+      lightLevel: lightLevel ?? this.lightLevel,
+      flameLevel: flameLevel ?? this.flameLevel,
       batteryLevel: batteryLevel ?? this.batteryLevel,
       riskLevel: riskLevel ?? this.riskLevel,
+      flameDetected: flameDetected ?? this.flameDetected,
       isConnected: isConnected ?? this.isConnected,
       alarmMuted: alarmMuted ?? this.alarmMuted,
       lastUpdated: lastUpdated ?? this.lastUpdated,
@@ -98,8 +114,11 @@ class SensorData {
       'smokeLevel': smokeLevel,
       'humidity': humidity,
       'coLevel': coLevel,
+      'lightLevel': lightLevel,
+      'flameLevel': flameLevel,
       'batteryLevel': batteryLevel,
       'riskLevel': riskLevel.backendValue,
+      'flameDetected': flameDetected,
       'isConnected': isConnected,
       'alarmMuted': alarmMuted,
       'lastUpdated': lastUpdated,
@@ -169,8 +188,11 @@ class AlertHistory {
   final double smokeLevel;
   final double humidity;
   final double coLevel;
+  final double lightLevel;
+  final double flameLevel;
   final RiskLevel riskLevel;
   final String status;
+  final bool flameDetected;
   final bool acknowledged;
   final bool muted;
   final bool emergencyCallRequested;
@@ -185,6 +207,9 @@ class AlertHistory {
     required this.status,
     this.humidity = 0,
     this.coLevel = 0,
+    this.lightLevel = 0,
+    this.flameLevel = 0,
+    this.flameDetected = false,
     this.acknowledged = false,
     this.muted = false,
     this.emergencyCallRequested = false,
@@ -196,9 +221,20 @@ class AlertHistory {
     String? deviceId,
   }) {
     final device = _mapFromBackend(map['deviceId']);
+    final reading =
+        _mapFromBackend(map['readingId']) ?? _mapFromBackend(map['reading']);
+    final flameDetected = _boolFromBackend(
+      map['flameDetected'] ?? reading?['flameDetected'],
+      false,
+    );
     final riskLevel = riskLevelFromBackend(
-      map['riskLevel'] ?? map['severity'] ?? map['status'] ?? map['type'],
-      flameDetected: _boolFromBackend(map['flameDetected'], false),
+      map['riskLevel'] ??
+          reading?['riskLevel'] ??
+          map['status'] ??
+          reading?['status'] ??
+          map['type'] ??
+          map['severity'],
+      flameDetected: flameDetected,
     );
     return AlertHistory(
       id: id ?? map['id']?.toString() ?? map['_id']?.toString() ?? '',
@@ -211,14 +247,36 @@ class AlertHistory {
       timestamp: _dateTimeFromBackend(
         map['timestamp'] ?? map['createdAt'] ?? map['updatedAt'],
       ),
-      temperature: _doubleFromBackend(map['temperature'], 0),
-      smokeLevel: _doubleFromBackend(map['smokeLevel'], 0),
-      humidity: _doubleFromBackend(map['humidity'], 0),
-      coLevel: _doubleFromBackend(map['coLevel'] ?? map['co2Level'], 0),
+      temperature: _doubleFromBackend(
+        map['temperature'] ?? reading?['temperature'],
+        0,
+      ),
+      smokeLevel: _doubleFromBackend(
+        map['smokeLevel'] ?? reading?['smokeLevel'],
+        0,
+      ),
+      humidity: _doubleFromBackend(map['humidity'] ?? reading?['humidity'], 0),
+      coLevel: _doubleFromBackend(
+        map['coLevel'] ??
+            map['co2Level'] ??
+            reading?['coLevel'] ??
+            reading?['co2Level'],
+        0,
+      ),
+      lightLevel: _doubleFromBackend(
+        map['lightLevel'] ?? reading?['lightLevel'],
+        0,
+      ),
+      flameLevel: _doubleFromBackend(
+        map['flameLevel'] ?? reading?['flameLevel'],
+        0,
+      ),
       riskLevel: riskLevel,
+      flameDetected: flameDetected,
       status:
-          map['status']?.toString() ??
           map['message']?.toString() ??
+          map['status']?.toString() ??
+          reading?['status']?.toString() ??
           _statusForRiskLevel(riskLevel),
       acknowledged: _boolFromBackend(
         map['acknowledged'] ?? map['isRead'],
@@ -240,7 +298,10 @@ class AlertHistory {
       'smokeLevel': smokeLevel,
       'humidity': humidity,
       'coLevel': coLevel,
+      'lightLevel': lightLevel,
+      'flameLevel': flameLevel,
       'riskLevel': riskLevel.backendValue,
+      'flameDetected': flameDetected,
       'status': status,
       'acknowledged': acknowledged,
       'muted': muted,
@@ -269,8 +330,11 @@ class LocalDataProvider {
       smokeLevel: 15.0,
       humidity: 45.0,
       coLevel: 12.0,
+      lightLevel: 650.0,
+      flameLevel: 0,
       batteryLevel: 85.0,
       riskLevel: RiskLevel.low,
+      flameDetected: false,
       isConnected: true,
       lastUpdated: DateTime.now(),
     );
@@ -285,6 +349,9 @@ class LocalDataProvider {
         smokeLevel: 45.0,
         humidity: 50.0,
         coLevel: 18.0,
+        lightLevel: 620.0,
+        flameLevel: 0,
+        flameDetected: false,
         riskLevel: RiskLevel.high,
         status: 'High Risk Detected',
       ),
@@ -294,6 +361,9 @@ class LocalDataProvider {
         smokeLevel: 28.5,
         humidity: 48.0,
         coLevel: 14.0,
+        lightLevel: 640.0,
+        flameLevel: 0,
+        flameDetected: false,
         riskLevel: RiskLevel.medium,
         status: 'Medium Risk Alert',
       ),
@@ -303,6 +373,9 @@ class LocalDataProvider {
         smokeLevel: 12.0,
         humidity: 43.0,
         coLevel: 10.0,
+        lightLevel: 680.0,
+        flameLevel: 0,
+        flameDetected: false,
         riskLevel: RiskLevel.low,
         status: 'Low Risk Reading',
       ),
@@ -312,6 +385,9 @@ class LocalDataProvider {
         smokeLevel: 18.0,
         humidity: 45.0,
         coLevel: 11.0,
+        lightLevel: 660.0,
+        flameLevel: 0,
+        flameDetected: false,
         riskLevel: RiskLevel.low,
         status: 'Normal Status',
       ),

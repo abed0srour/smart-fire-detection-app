@@ -28,6 +28,16 @@ const sensorReadingSchema = new mongoose.Schema(
       required: true,
     },
 
+    lightLevel: {
+      type: Number,
+      default: 0,
+    },
+
+    flameLevel: {
+      type: Number,
+      default: 0,
+    },
+
     flameDetected: {
       type: Boolean,
       default: false,

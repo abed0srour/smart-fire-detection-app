@@ -390,6 +390,20 @@ class _RoomsScreenState extends State<RoomsScreen> {
         unit: 'ppm',
         color: const Color(0xFFA78BFA),
       ),
+      _RoomMetric(
+        icon: Icons.light_mode,
+        label: 'Light',
+        value: reading.lightLevel.toStringAsFixed(0),
+        unit: 'lux',
+        color: AppColors.warning,
+      ),
+      _RoomMetric(
+        icon: Icons.local_fire_department,
+        label: 'Flame',
+        value: reading.flameDetected ? 'YES' : 'NO',
+        unit: ' ${reading.flameLevel.toStringAsFixed(0)}',
+        color: reading.flameDetected ? AppColors.danger : AppColors.success,
+      ),
     ];
 
     return LayoutBuilder(

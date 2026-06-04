@@ -20,9 +20,14 @@ const alertSchema = new mongoose.Schema(
       required: true,
     },
 
+    readingId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "SensorReading",
+    },
+
     type: {
       type: String,
-      enum: ["fire", "smoke", "co2", "temperature", "device_offline"],
+      enum: ["fire", "smoke", "co2", "temperature", "light", "device_offline"],
       required: true,
     },
 
@@ -35,6 +40,39 @@ const alertSchema = new mongoose.Schema(
       type: String,
       enum: ["low", "medium", "high", "critical"],
       default: "medium",
+    },
+
+    temperature: {
+      type: Number,
+    },
+
+    smokeLevel: {
+      type: Number,
+    },
+
+    humidity: {
+      type: Number,
+    },
+
+    co2Level: {
+      type: Number,
+    },
+
+    lightLevel: {
+      type: Number,
+    },
+
+    flameLevel: {
+      type: Number,
+    },
+
+    flameDetected: {
+      type: Boolean,
+    },
+
+    status: {
+      type: String,
+      enum: ["safe", "warning", "danger"],
     },
 
     isRead: {

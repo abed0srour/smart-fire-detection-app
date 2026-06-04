@@ -42,11 +42,11 @@ class _AlertScreenState extends State<AlertScreen>
         backgroundColor: AppColors.surface,
         elevation: 0,
         title: const Text(
-          'FIRE ALERT',
+          'Alerts',
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.bold,
-            color: AppColors.danger,
+            color: AppColors.textPrimary,
           ),
         ),
         centerTitle: true,
@@ -190,6 +190,20 @@ class _AlertScreenState extends State<AlertScreen>
             'CO2 Level',
             '${sensorData.coLevel.toStringAsFixed(1)} ppm',
             const Color(0xFFA78BFA),
+          ),
+          const SizedBox(height: 16),
+          _buildReadingRow(
+            'Light Level',
+            '${sensorData.lightLevel.toStringAsFixed(0)} lux',
+            AppColors.warning,
+          ),
+          const SizedBox(height: 16),
+          _buildReadingRow(
+            'Flame',
+            sensorData.flameDetected
+                ? 'Detected (${sensorData.flameLevel.toStringAsFixed(0)})'
+                : 'Clear (${sensorData.flameLevel.toStringAsFixed(0)})',
+            sensorData.flameDetected ? AppColors.danger : AppColors.success,
           ),
         ],
       ),

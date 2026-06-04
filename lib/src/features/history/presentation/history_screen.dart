@@ -191,6 +191,12 @@ class HistoryScreen extends StatelessWidget {
                       color: const Color(0xFFA78BFA),
                       value: '${alert.coLevel.toStringAsFixed(1)} ppm',
                     ),
+                    const SizedBox(width: 8),
+                    _buildSensorChip(
+                      icon: Icons.light_mode,
+                      color: AppColors.warning,
+                      value: '${alert.lightLevel.toStringAsFixed(0)} lux',
+                    ),
                   ],
                 ),
               ],
@@ -288,6 +294,18 @@ class HistoryScreen extends StatelessWidget {
               'CO2 Level',
               '${alert.coLevel.toStringAsFixed(1)} ppm',
               const Color(0xFFA78BFA),
+            ),
+            _buildDetailRow(
+              'Light Level',
+              '${alert.lightLevel.toStringAsFixed(0)} lux',
+              AppColors.warning,
+            ),
+            _buildDetailRow(
+              'Flame',
+              alert.flameDetected
+                  ? 'Detected (${alert.flameLevel.toStringAsFixed(0)})'
+                  : 'Clear (${alert.flameLevel.toStringAsFixed(0)})',
+              alert.flameDetected ? AppColors.danger : AppColors.success,
             ),
             _buildDetailRow(
               'Risk Level',

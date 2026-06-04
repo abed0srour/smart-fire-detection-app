@@ -324,6 +324,11 @@ class _MainShellState extends State<MainShell> {
     _activeCriticalDeviceId = null;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
+        if (_currentIndex == 2) {
+          setState(() {
+            _currentIndex = 0;
+          });
+        }
         ScaffoldMessenger.of(context).hideCurrentMaterialBanner();
       }
     });

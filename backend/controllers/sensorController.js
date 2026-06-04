@@ -38,6 +38,12 @@ const numberFromPayload = (value) => {
   return Number.isFinite(numericValue) ? numericValue : null;
 };
 
+const statusRank = {
+  safe: 0,
+  warning: 1,
+  danger: 2,
+};
+
 const booleanFromPayload = (value) => {
   if (typeof value === "boolean") {
     return value;
@@ -48,6 +54,35 @@ const booleanFromPayload = (value) => {
   }
 
   return false;
+};
+
+const statusFromPayload = (value) => {
+  const normalizedValue = value?.toString().trim().toLowerCase();
+
+  if (normalizedValue === "safe" || normalizedValue === "warning") {
+    return normalizedValue;
+  }
+
+  if (
+    normalizedValue === "danger" ||
+    normalizedValue === "high" ||
+    normalizedValue === "critical" ||
+    normalizedValue === "fire"
+  ) {
+    return "danger";
+  }
+
+  return null;
+};
+
+const mostSevereStatus = (...statuses) => {
+  return statuses.reduce((selected, status) => {
+    if (!status) {
+      return selected;
+    }
+
+    return statusRank[status] > statusRank[selected] ? status : selected;
+  }, "safe");
 };
 
 const normalizeRawThreshold = (value, fallback) => {
@@ -112,8 +147,31 @@ const alertTypeForReading = (sensorData, thresholds) => {
     return "co2";
   }
 
-  return "temperature";
+  if (sensorData.temperature > thresholds.temperatureDanger) {
+    return "temperature";
+  }
+
+  if (sensorData.payloadStatus === "danger" && sensorData.smokeLevel > 0) {
+    return "smoke";
+  }
+
+  return "light";
 };
+
+const alertMessage = "Danger detected! Please check the room immediately.";
+
+const alertSnapshotForReading = (reading, batteryLevel) => ({
+  readingId: reading._id,
+  temperature: reading.temperature,
+  smokeLevel: reading.smokeLevel,
+  humidity: reading.humidity,
+  co2Level: reading.co2Level,
+  lightLevel: reading.lightLevel,
+  flameLevel: reading.flameLevel,
+  flameDetected: reading.flameDetected,
+  status: reading.status,
+  batteryLevel,
+});
 
 const getCurrentUser = async (firebaseUid) => {
   return await User.findOne({ firebaseUid });
@@ -144,8 +202,11 @@ const addSensorReading = async (req, res) => {
       humidity,
       co2Level,
       coLevel,
+      lightLevel,
+      flameLevel,
       flameDetected,
       batteryLevel,
+      status: payloadStatus,
     } = req.body;
 
     const resolvedDeviceCode = deviceCode || deviceId;
@@ -185,22 +246,31 @@ const addSensorReading = async (req, res) => {
     const normalizedSmokeLevel = numberFromPayload(smokeLevel);
     const normalizedHumidity = numberFromPayload(humidity ?? 0);
     const normalizedCo2Level = numberFromPayload(resolvedCo2Level);
+    const normalizedLightLevel = numberFromPayload(lightLevel ?? 0);
+    const normalizedFlameLevel = numberFromPayload(
+      flameLevel ?? (booleanFromPayload(flameDetected) ? 1 : 0)
+    );
     const normalizedFlameDetected = booleanFromPayload(flameDetected);
     const normalizedBatteryLevel =
       batteryLevel === undefined ? null : numberFromPayload(batteryLevel);
+    const normalizedPayloadStatus = statusFromPayload(payloadStatus);
 
     if (
       normalizedTemperature === null ||
       normalizedSmokeLevel === null ||
-      normalizedCo2Level === null
+      normalizedCo2Level === null ||
+      normalizedLightLevel === null ||
+      normalizedFlameLevel === null
     ) {
       logSensor("response status", {
         status: 400,
-        message: "temperature, smokeLevel, and co2Level must be numbers",
+        message:
+          "temperature, smokeLevel, co2Level, lightLevel, and flameLevel must be numbers",
       });
       return res.status(400).json({
         success: false,
-        message: "temperature, smokeLevel, and co2Level must be numbers",
+        message:
+          "temperature, smokeLevel, co2Level, lightLevel, and flameLevel must be numbers",
       });
     }
 
@@ -218,7 +288,7 @@ const addSensorReading = async (req, res) => {
 
     thresholds = normalizeThresholds(thresholds);
 
-    const status = calculateStatus(
+    const calculatedStatus = calculateStatus(
       {
         temperature: normalizedTemperature,
         smokeLevel: normalizedSmokeLevel,
@@ -227,6 +297,7 @@ const addSensorReading = async (req, res) => {
       },
       thresholds
     );
+    const status = mostSevereStatus(calculatedStatus, normalizedPayloadStatus);
 
     const reading = await SensorReading.create({
       deviceId: device._id,
@@ -234,6 +305,8 @@ const addSensorReading = async (req, res) => {
       smokeLevel: normalizedSmokeLevel,
       humidity: normalizedHumidity ?? 0,
       co2Level: normalizedCo2Level,
+      lightLevel: normalizedLightLevel,
+      flameLevel: normalizedFlameLevel,
       flameDetected: normalizedFlameDetected,
       status,
     });
@@ -245,6 +318,8 @@ const addSensorReading = async (req, res) => {
       smokeLevel: reading.smokeLevel,
       humidity: reading.humidity,
       co2Level: reading.co2Level,
+      lightLevel: reading.lightLevel,
+      flameLevel: reading.flameLevel,
       flameDetected: reading.flameDetected,
       status: reading.status,
       createdAt: reading.createdAt,
@@ -262,23 +337,72 @@ const addSensorReading = async (req, res) => {
     let alert = null;
 
     if (status === "danger") {
-      alert = await Alert.create({
+      const type = alertTypeForReading(
+        {
+          temperature: normalizedTemperature,
+          smokeLevel: normalizedSmokeLevel,
+          co2Level: normalizedCo2Level,
+          flameDetected: normalizedFlameDetected,
+          payloadStatus: normalizedPayloadStatus,
+        },
+        thresholds
+      );
+      const snapshot = alertSnapshotForReading(reading, normalizedBatteryLevel);
+      await Alert.updateMany(
+        {
+          userId: device.userId,
+          deviceId: device._id,
+          isResolved: false,
+          message: alertMessage,
+          type: { $ne: type },
+        },
+        {
+          isResolved: true,
+          resolvedAt: new Date(),
+        }
+      );
+
+      const activeAlert = await Alert.findOne({
         userId: device.userId,
         roomId: device.roomId,
         deviceId: device._id,
-        type: alertTypeForReading(
-          {
-            temperature: normalizedTemperature,
-            smokeLevel: normalizedSmokeLevel,
-            co2Level: normalizedCo2Level,
-            flameDetected: normalizedFlameDetected,
-          },
-          thresholds
-        ),
-        message: "Danger detected! Please check the room immediately.",
-        severity: "critical",
-      });
+        type,
+        isResolved: false,
+        message: alertMessage,
+      }).sort({ createdAt: -1 });
 
+      if (activeAlert) {
+        await Alert.findByIdAndUpdate(activeAlert._id, {
+          ...snapshot,
+          severity: "critical",
+        });
+      } else {
+        alert = await Alert.create({
+          userId: device.userId,
+          roomId: device.roomId,
+          deviceId: device._id,
+          type,
+          message: alertMessage,
+          severity: "critical",
+          ...snapshot,
+        });
+      }
+    } else {
+      await Alert.updateMany(
+        {
+          userId: device.userId,
+          deviceId: device._id,
+          isResolved: false,
+          message: alertMessage,
+        },
+        {
+          isResolved: true,
+          resolvedAt: new Date(),
+        }
+      );
+    }
+
+    if (alert) {
       const user = await User.findById(device.userId);
 
       if (user && user.fcmToken) {
@@ -296,7 +420,9 @@ const addSensorReading = async (req, res) => {
     }
 
     const populatedReading = await reading.populate("deviceId");
-    const populatedAlert = alert ? await alert.populate("roomId deviceId") : null;
+    const populatedAlert = alert
+      ? await alert.populate("roomId deviceId readingId")
+      : null;
     const realtimePayload = {
       reading: populatedReading,
       deviceId: device._id.toString(),

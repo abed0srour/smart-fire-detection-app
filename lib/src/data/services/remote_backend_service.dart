@@ -88,6 +88,7 @@ class RemoteBackendService implements BackendService {
   SensorData? _cachedSensorData;
   List<AlertHistory>? _cachedAlertHistory;
   List<RoomOverview>? _cachedRoomOverviews;
+  final Set<String> _deletedCircuitDeviceCodes = <String>{};
   final Map<String, SensorData> _latestSensorDataByDevice =
       <String, SensorData>{};
 
@@ -220,6 +221,8 @@ class RemoteBackendService implements BackendService {
   @override
   Future<void> deleteRoom(String roomId) async {
     await _request(method: 'DELETE', path: '/api/rooms/$roomId');
+    _rememberDeletedCircuitDevices(roomId);
+    _removeRoomFromCache(roomId);
     if (_cachedRoom?.id == roomId) {
       _cachedRoom = null;
       _cachedDevice = null;
@@ -688,6 +691,9 @@ class RemoteBackendService implements BackendService {
       merged['smokeLevel'] = readingMap['smokeLevel'];
       merged['humidity'] = readingMap['humidity'];
       merged['coLevel'] = readingMap['coLevel'] ?? readingMap['co2Level'];
+      merged['lightLevel'] = readingMap['lightLevel'];
+      merged['flameLevel'] = readingMap['flameLevel'];
+      merged['flameDetected'] = readingMap['flameDetected'];
       merged['riskLevel'] =
           readingMap['riskLevel'] ??
           readingMap['status'] ??
@@ -868,6 +874,10 @@ class RemoteBackendService implements BackendService {
     }
 
     final missingDefinitions = _circuitDeviceDefinitions.where((definition) {
+      if (_deletedCircuitDeviceCodes.contains(definition.deviceCode)) {
+        return false;
+      }
+
       return !devices.any(
         (device) => device.matchesCode(definition.deviceCode),
       );
@@ -910,6 +920,63 @@ class RemoteBackendService implements BackendService {
     }
 
     return changed;
+  }
+
+  void _rememberDeletedCircuitDevices(String roomId) {
+    final rooms = _cachedRoomOverviews;
+
+    if (rooms == null) {
+      return;
+    }
+
+    for (final room in rooms) {
+      if (room.id != roomId) {
+        continue;
+      }
+
+      for (final definition in _circuitDeviceDefinitions) {
+        if (room.name.toLowerCase() == definition.roomName.toLowerCase()) {
+          _deletedCircuitDeviceCodes.add(definition.deviceCode);
+        }
+      }
+
+      for (final device in room.devices) {
+        _deletedCircuitDeviceCodes.add(device.deviceCode);
+      }
+      return;
+    }
+  }
+
+  void _removeRoomFromCache(String roomId) {
+    final rooms = _cachedRoomOverviews;
+
+    if (rooms == null) {
+      return;
+    }
+
+    final removedDeviceCodes = <String>{};
+    final remainingRooms = <RoomOverview>[];
+
+    for (final room in rooms) {
+      if (room.id == roomId) {
+        removedDeviceCodes.addAll(
+          room.devices.map((device) => device.deviceCode),
+        );
+        continue;
+      }
+
+      remainingRooms.add(room);
+    }
+
+    if (removedDeviceCodes.isEmpty && remainingRooms.length == rooms.length) {
+      return;
+    }
+
+    for (final deviceCode in removedDeviceCodes) {
+      _latestSensorDataByDevice.remove(deviceCode);
+    }
+
+    _setRoomOverviews(remainingRooms);
   }
 
   Future<List<_BackendRoom>> _fetchBackendRooms() async {
@@ -982,8 +1049,11 @@ class RemoteBackendService implements BackendService {
       smokeLevel: 0,
       humidity: 0,
       coLevel: 0,
+      lightLevel: 0,
+      flameLevel: 0,
       batteryLevel: device.batteryLevel,
       riskLevel: RiskLevel.low,
+      flameDetected: false,
       isConnected: device.isOnline,
       alarmMuted: device.alarmMuted,
       lastUpdated: device.lastSeen ?? DateTime.now(),
@@ -1382,6 +1452,9 @@ void _logSensorValues(String message, SensorData sensorData) {
     'smokeLevel=${sensorData.smokeLevel}, '
     'humidity=${sensorData.humidity}, '
     'co2Level=${sensorData.coLevel}, '
+    'lightLevel=${sensorData.lightLevel}, '
+    'flameLevel=${sensorData.flameLevel}, '
+    'flameDetected=${sensorData.flameDetected}, '
     'riskLevel=${sensorData.riskLevel.backendValue}, '
     'lastUpdated=${sensorData.lastUpdated.toIso8601String()}',
   );
