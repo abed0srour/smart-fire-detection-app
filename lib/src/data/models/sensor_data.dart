@@ -33,7 +33,20 @@ class SensorData {
   factory SensorData.fromMap(Map<String, dynamic> map, {String? deviceId}) {
     final device = _mapFromBackend(map['deviceId']);
     final flameDetected = _boolFromBackend(map['flameDetected'], false);
-    final status = map['riskLevel'] ?? map['status'];
+    
+    var status = map['riskLevel'] ?? map['status'];
+    if (status == null) {
+      final temp = _doubleFromBackend(map['temperature'], 0);
+      final smoke = _doubleFromBackend(map['smokeLevel'], 0);
+      if (flameDetected || temp > 50.0 || smoke > 3000) {
+        status = 'danger';
+      } else if (temp >= 40.0 || smoke >= 300) {
+        status = 'warning';
+      } else {
+        status = 'safe';
+      }
+    }
+
     final riskLevel = riskLevelFromBackend(
       status,
       flameDetected: flameDetected,
@@ -45,6 +58,7 @@ class SensorData {
           device?['deviceCode']?.toString() ??
           device?['deviceId']?.toString() ??
           map['deviceId']?.toString() ??
+          map['deviceCode']?.toString() ??
           'MASTER_ROOM',
       temperature: _doubleFromBackend(map['temperature'], 0),
       smokeLevel: _doubleFromBackend(map['smokeLevel'], 0),
@@ -171,7 +185,7 @@ RiskLevel riskLevelFromBackend(Object? value, {bool flameDetected = false}) {
       return RiskLevel.high;
     case 'fire':
     case 'critical':
-      return RiskLevel.fire;
+      return RiskLevel.high;
     case 'low':
     case 'safe':
     default:
@@ -236,6 +250,11 @@ class AlertHistory {
           map['severity'],
       flameDetected: flameDetected,
     );
+    final status =
+        map['message']?.toString() ??
+        map['status']?.toString() ??
+        reading?['status']?.toString();
+
     return AlertHistory(
       id: id ?? map['id']?.toString() ?? map['_id']?.toString() ?? '',
       deviceId:
@@ -273,11 +292,7 @@ class AlertHistory {
       ),
       riskLevel: riskLevel,
       flameDetected: flameDetected,
-      status:
-          map['message']?.toString() ??
-          map['status']?.toString() ??
-          reading?['status']?.toString() ??
-          _statusForRiskLevel(riskLevel),
+      status: _statusForDisplay(status, riskLevel),
       acknowledged: _boolFromBackend(
         map['acknowledged'] ?? map['isRead'],
         false,
@@ -402,10 +417,20 @@ String _statusForRiskLevel(RiskLevel riskLevel) {
     case RiskLevel.medium:
       return 'Medium Risk Alert';
     case RiskLevel.high:
-      return 'High Risk Detected';
+      return 'Danger: High Gas Leakage';
     case RiskLevel.fire:
       return 'Fire Detected';
   }
+}
+
+String _statusForDisplay(String? status, RiskLevel riskLevel) {
+  if (riskLevel == RiskLevel.high) {
+    return _statusForRiskLevel(RiskLevel.high);
+  }
+  if (riskLevel == RiskLevel.fire) {
+    return _statusForRiskLevel(RiskLevel.fire);
+  }
+  return status ?? _statusForRiskLevel(riskLevel);
 }
 
 bool _boolFromBackend(Object? value, bool fallback) {

@@ -13,7 +13,7 @@ import 'package:smart_fire_detection_app/src/features/auth/presentation/auth_scr
 import 'package:smart_fire_detection_app/src/features/dashboard/presentation/dashboard_screen.dart';
 import 'package:smart_fire_detection_app/src/features/history/presentation/history_screen.dart';
 import 'package:smart_fire_detection_app/src/features/rooms/presentation/rooms_screen.dart';
-import 'package:smart_fire_detection_app/src/features/settings/presentation/settings_screen.dart';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:smart_fire_detection_app/src/shared/widgets/custom_navbar.dart';
 
 class SmartFireApp extends StatefulWidget {
@@ -247,14 +247,24 @@ class _MainShellState extends State<MainShell> {
   StreamSubscription<SensorData>? _criticalAlertSubscription;
   bool _criticalAlertActive = false;
   String? _activeCriticalDeviceId;
+  String? _activeCriticalAlertType;
+  late final AudioPlayer _audioPlayer;
+  bool _isAudioPlaying = false;
 
   final List<Widget> _screens = const [
     DashboardScreen(),
     RoomsScreen(),
     AlertScreen(),
     HistoryScreen(),
-    SettingsScreen(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _audioPlayer = AudioPlayer();
+    _audioPlayer.audioCache = AudioCache(prefix: '');
+    _audioPlayer.setReleaseMode(ReleaseMode.loop);
+  }
 
   @override
   void didChangeDependencies() {
@@ -268,6 +278,8 @@ class _MainShellState extends State<MainShell> {
     _alertBackend = backend;
     _criticalAlertActive = false;
     _activeCriticalDeviceId = null;
+    _activeCriticalAlertType = null;
+    _stopDangerSound();
     _criticalAlertSubscription = backend.watchCurrentSensorData().listen(
       _handleCriticalSensorData,
       onError: (_) {},
@@ -277,6 +289,7 @@ class _MainShellState extends State<MainShell> {
   @override
   void dispose() {
     _criticalAlertSubscription?.cancel();
+    _audioPlayer.dispose();
     super.dispose();
   }
 
@@ -295,6 +308,30 @@ class _MainShellState extends State<MainShell> {
     );
   }
 
+  void _playDangerSound() async {
+    if (!_isAudioPlaying) {
+      try {
+        _isAudioPlaying = true;
+        await _audioPlayer.play(AssetSource('sound/videoplayback.mp3'));
+      } catch (e) {
+        debugPrint('Error playing danger sound: $e');
+        _isAudioPlaying = false;
+      }
+    }
+  }
+
+  void _stopDangerSound() async {
+    if (_isAudioPlaying) {
+      try {
+        await _audioPlayer.stop();
+      } catch (e) {
+        debugPrint('Error stopping danger sound: $e');
+      } finally {
+        _isAudioPlaying = false;
+      }
+    }
+  }
+
   void _handleCriticalSensorData(SensorData sensorData) {
     final isCritical =
         sensorData.riskLevel == RiskLevel.fire ||
@@ -305,13 +342,21 @@ class _MainShellState extends State<MainShell> {
       return;
     }
 
+    final alertType = sensorData.riskLevel == RiskLevel.fire ? 'fire' : 'gas';
     if (_criticalAlertActive &&
-        _activeCriticalDeviceId == sensorData.deviceId) {
+        _activeCriticalDeviceId == sensorData.deviceId &&
+        _activeCriticalAlertType == alertType) {
+      if (sensorData.alarmMuted) {
+        _stopDangerSound();
+      } else {
+        _playDangerSound();
+      }
       return;
     }
 
     _criticalAlertActive = true;
     _activeCriticalDeviceId = sensorData.deviceId;
+    _activeCriticalAlertType = alertType;
     _showCriticalAlert(sensorData);
   }
 
@@ -322,6 +367,8 @@ class _MainShellState extends State<MainShell> {
 
     _criticalAlertActive = false;
     _activeCriticalDeviceId = null;
+    _activeCriticalAlertType = null;
+    _stopDangerSound();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         if (_currentIndex == 2) {
@@ -335,6 +382,19 @@ class _MainShellState extends State<MainShell> {
   }
 
   void _showCriticalAlert(SensorData sensorData) {
+    if (!sensorData.alarmMuted) {
+      _playDangerSound();
+    } else {
+      _stopDangerSound();
+    }
+    final isFireAlert = sensorData.riskLevel == RiskLevel.fire;
+    final bannerText = isFireAlert
+        ? 'Critical fire alert from ${sensorData.deviceId}'
+        : 'Danger: high gas leakage from ${sensorData.deviceId} - gas level ${sensorData.smokeLevel.toStringAsFixed(1)} ppm';
+    final bannerIcon = isFireAlert
+        ? Icons.local_fire_department
+        : Icons.gas_meter;
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
@@ -351,9 +411,9 @@ class _MainShellState extends State<MainShell> {
       messenger.showMaterialBanner(
         MaterialBanner(
           backgroundColor: AppColors.danger,
-          leading: const Icon(Icons.local_fire_department, color: Colors.white),
+          leading: Icon(bannerIcon, color: Colors.white),
           content: Text(
-            'Critical fire alert from ${sensorData.deviceId}',
+            bannerText,
             style: const TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.w700,

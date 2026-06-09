@@ -40,20 +40,6 @@ class _RoomsScreenState extends State<RoomsScreen> {
         elevation: 0,
         title: const Text('Rooms'),
         centerTitle: true,
-        actions: [
-          IconButton(
-            tooltip: 'Add room',
-            icon: const Icon(Icons.add_home_work_outlined),
-            onPressed: () => _showCreateRoomDialog(backend),
-          ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.add),
-        label: const Text('ROOM'),
-        onPressed: () => _showCreateRoomDialog(backend),
       ),
       body: StreamBuilder<List<RoomOverview>>(
         stream: stream,
@@ -73,7 +59,9 @@ class _RoomsScreenState extends State<RoomsScreen> {
             );
           }
 
-          final rooms = snapshot.data ?? const <RoomOverview>[];
+          final rooms = (snapshot.data ?? const <RoomOverview>[])
+              .where((room) => room.name.toLowerCase() != 'bedroom')
+              .toList();
           if (rooms.isEmpty) {
             return _buildStateMessage(
               icon: Icons.meeting_room_outlined,
@@ -408,8 +396,13 @@ class _RoomsScreenState extends State<RoomsScreen> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final columns = constraints.maxWidth > 540 ? 4 : 2;
+        final columns = constraints.maxWidth > 900
+            ? 4
+            : constraints.maxWidth > 640
+                ? 3
+                : 2;
         return GridView.builder(
+          padding: const EdgeInsets.only(bottom: 8),
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           itemCount: metrics.length,
@@ -417,7 +410,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
             crossAxisCount: columns,
             crossAxisSpacing: 10,
             mainAxisSpacing: 10,
-            childAspectRatio: columns == 4 ? 1.35 : 1.55,
+            mainAxisExtent: 110,
           ),
           itemBuilder: (context, index) => _buildMetricTile(metrics[index]),
         );
@@ -591,158 +584,6 @@ class _RoomsScreenState extends State<RoomsScreen> {
     return '${diff.inDays}d';
   }
 
-  Future<void> _showCreateRoomDialog(BackendService backend) async {
-    final scaffoldMessenger = ScaffoldMessenger.of(context);
-    final formKey = GlobalKey<FormState>();
-    final nameController = TextEditingController();
-    final locationController = TextEditingController();
-    final deviceCodeController = TextEditingController();
-    var isSaving = false;
-    String? errorMessage;
-
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              backgroundColor: AppColors.surface,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-              title: const Text(
-                'Create Room',
-                style: TextStyle(
-                  color: AppColors.textPrimary,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              content: Form(
-                key: formKey,
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (errorMessage != null) ...[
-                        _buildDialogError(errorMessage!),
-                        const SizedBox(height: 12),
-                      ],
-                      TextFormField(
-                        controller: nameController,
-                        enabled: !isSaving,
-                        autofocus: true,
-                        style: const TextStyle(color: AppColors.textPrimary),
-                        decoration: const InputDecoration(
-                          labelText: 'Room name',
-                          prefixIcon: Icon(Icons.meeting_room_outlined),
-                        ),
-                        validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
-                            return 'Required';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 12),
-                      TextFormField(
-                        controller: locationController,
-                        enabled: !isSaving,
-                        style: const TextStyle(color: AppColors.textPrimary),
-                        decoration: const InputDecoration(
-                          labelText: 'Location',
-                          prefixIcon: Icon(Icons.location_on_outlined),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      TextFormField(
-                        controller: deviceCodeController,
-                        enabled: !isSaving,
-                        style: const TextStyle(color: AppColors.textPrimary),
-                        textCapitalization: TextCapitalization.characters,
-                        decoration: const InputDecoration(
-                          labelText: 'Device code',
-                          prefixIcon: Icon(Icons.sensors_outlined),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: isSaving
-                      ? null
-                      : () => Navigator.pop(dialogContext),
-                  child: const Text('Cancel'),
-                ),
-                ElevatedButton.icon(
-                  onPressed: isSaving
-                      ? null
-                      : () async {
-                          final form = formKey.currentState;
-                          if (form == null || !form.validate()) {
-                            return;
-                          }
-
-                          setDialogState(() {
-                            isSaving = true;
-                            errorMessage = null;
-                          });
-
-                          try {
-                            await backend.createRoom(
-                              name: nameController.text,
-                              location: locationController.text,
-                              deviceCode: deviceCodeController.text,
-                            );
-                            if (!dialogContext.mounted) {
-                              return;
-                            }
-                            Navigator.pop(dialogContext);
-                            await _reloadRooms(backend);
-                            if (!mounted) {
-                              return;
-                            }
-                            scaffoldMessenger.showSnackBar(
-                              SnackBar(
-                                content: const Text('Room created'),
-                                backgroundColor: AppColors.primary,
-                                behavior: SnackBarBehavior.floating,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                              ),
-                            );
-                          } catch (error) {
-                            setDialogState(() {
-                              isSaving = false;
-                              errorMessage = error.toString();
-                            });
-                          }
-                        },
-                  icon: isSaving
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Icon(Icons.check),
-                  label: Text(isSaving ? 'CREATING' : 'CREATE'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-
-    nameController.dispose();
-    locationController.dispose();
-    deviceCodeController.dispose();
-  }
 
   Future<void> _showManageRoomDialog(
     BackendService backend,

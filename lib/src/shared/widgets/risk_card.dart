@@ -116,10 +116,10 @@ class _RiskDetails {
         );
       case RiskLevel.high:
         return const _RiskDetails(
-          label: 'HIGH',
-          description: 'Elevated conditions need attention',
-          color: Colors.deepOrange,
-          icon: Icons.report_problem_outlined,
+          label: 'HIGH GAS',
+          description: 'Danger: high gas leakage',
+          color: AppColors.danger,
+          icon: Icons.gas_meter,
         );
       case RiskLevel.fire:
         return const _RiskDetails(

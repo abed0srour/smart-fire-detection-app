@@ -76,11 +76,13 @@ class AuthService {
     required this.backendBaseUrl,
     http.Client? client,
     AuthSessionStorage? sessionStorage,
+    this.requestTimeout = const Duration(seconds: 15),
   }) : _client = client ?? http.Client(),
        _sessionStorage = sessionStorage ?? createAuthSessionStorage();
 
   final String firebaseApiKey;
   final String backendBaseUrl;
+  final Duration requestTimeout;
   final http.Client _client;
   final AuthSessionStorage _sessionStorage;
 
@@ -111,13 +113,15 @@ class AuthService {
       'key': firebaseApiKey,
     });
 
-    final response = await _client.post(
-      uri,
-      headers: const {'Content-Type': 'application/x-www-form-urlencoded'},
-      body: {
-        'grant_type': 'refresh_token',
-        'refresh_token': session.refreshToken,
-      },
+    final response = await _withAuthTimeout(
+      _client.post(
+        uri,
+        headers: const {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: {
+          'grant_type': 'refresh_token',
+          'refresh_token': session.refreshToken,
+        },
+      ),
     );
 
     final body = _decodeBody(response);
@@ -233,14 +237,14 @@ class AuthService {
     };
 
     final encodedBody = body == null ? null : jsonEncode(body);
-    final response = switch (method) {
-      'GET' => await _client.get(uri, headers: headers),
-      'POST' => await _client.post(uri, headers: headers, body: encodedBody),
-      'PUT' => await _client.put(uri, headers: headers, body: encodedBody),
-      'PATCH' => await _client.patch(uri, headers: headers, body: encodedBody),
-      'DELETE' => await _client.delete(uri, headers: headers),
+    final response = await _withBackendTimeout(switch (method) {
+      'GET' => _client.get(uri, headers: headers),
+      'POST' => _client.post(uri, headers: headers, body: encodedBody),
+      'PUT' => _client.put(uri, headers: headers, body: encodedBody),
+      'PATCH' => _client.patch(uri, headers: headers, body: encodedBody),
+      'DELETE' => _client.delete(uri, headers: headers),
       _ => throw BackendException('Unsupported HTTP method: $method'),
-    };
+    });
 
     final decoded = _decodeBody(response);
     if (response.statusCode >= 400) {
@@ -267,14 +271,16 @@ class AuthService {
       'key': firebaseApiKey,
     });
 
-    final response = await _client.post(
-      uri,
-      headers: const {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'email': email,
-        'password': password,
-        'returnSecureToken': true,
-      }),
+    final response = await _withAuthTimeout(
+      _client.post(
+        uri,
+        headers: const {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'email': email,
+          'password': password,
+          'returnSecureToken': true,
+        }),
+      ),
     );
 
     final body = _decodeBody(response);
@@ -296,6 +302,28 @@ class AuthService {
     return backendBaseUrl.endsWith('/')
         ? backendBaseUrl.substring(0, backendBaseUrl.length - 1)
         : backendBaseUrl;
+  }
+
+  Future<http.Response> _withAuthTimeout(Future<http.Response> request) {
+    return request.timeout(
+      requestTimeout,
+      onTimeout: () {
+        throw const AuthException(
+          'Authentication request timed out. Check your network and try again.',
+        );
+      },
+    );
+  }
+
+  Future<http.Response> _withBackendTimeout(Future<http.Response> request) {
+    return request.timeout(
+      requestTimeout,
+      onTimeout: () {
+        throw const BackendException(
+          'Backend request timed out. Make sure the backend server is running and reachable from this device.',
+        );
+      },
+    );
   }
 }
 

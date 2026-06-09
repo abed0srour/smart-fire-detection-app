@@ -17,11 +17,6 @@ const List<_CircuitDeviceDefinition> _circuitDeviceDefinitions = [
     roomName: 'Master Room',
     roomLocation: 'Room 1',
   ),
-  _CircuitDeviceDefinition(
-    deviceCode: 'BEDROOM_1',
-    roomName: 'Bedroom',
-    roomLocation: 'Room 2',
-  ),
 ];
 
 class RemoteBackendService implements BackendService {

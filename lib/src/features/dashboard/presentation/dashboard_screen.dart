@@ -3,13 +3,61 @@ import 'package:provider/provider.dart';
 import 'package:smart_fire_detection_app/src/app/app_colors.dart';
 import 'package:smart_fire_detection_app/src/data/models/sensor_data.dart';
 import 'package:smart_fire_detection_app/src/data/services/backend_service.dart';
+import 'package:smart_fire_detection_app/src/data/services/mqtt_service.dart';
 import 'package:smart_fire_detection_app/src/shared/widgets/emergency_button.dart';
 import 'package:smart_fire_detection_app/src/shared/widgets/risk_card.dart';
 import 'package:smart_fire_detection_app/src/shared/widgets/sensor_card.dart';
 
 /// Main dashboard screen showing current sensor status.
-class DashboardScreen extends StatelessWidget {
+/// Supports both Backend API and MQTT real-time sensor data.
+class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
+
+  @override
+  State<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends State<DashboardScreen> {
+  MqttService? _mqttService;
+  Map<String, dynamic>? _latestSensorData;
+  bool _useMqtt = false;
+
+  bool get _hasMqttData => _useMqtt && _latestSensorData != null;
+
+  @override
+  void initState() {
+    super.initState();
+    _setupMqtt();
+  }
+
+  /// Initialize MQTT client and connect to broker
+  Future<void> _setupMqtt() async {
+    _mqttService = MqttService(
+      broker: '172.20.10.3', // Local Mosquitto broker on your laptop
+      port: 1883,
+      deviceCode: 'MASTER_ROOM',
+      onSensorData: (data) {
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _useMqtt = true;
+          _latestSensorData = data;
+        });
+      },
+    );
+
+    final connected = await _mqttService?.connect() ?? false;
+    if (!mounted) {
+      return;
+    }
+    if (!connected) {
+      // Fall back to backend if MQTT fails
+      setState(() {
+        _useMqtt = false;
+      });
+    }
+  }
 
   Map<String, dynamic> _getStatusDisplay(SensorData sensorData) {
     switch (sensorData.riskLevel) {
@@ -26,11 +74,16 @@ class DashboardScreen extends StatelessWidget {
           'icon': Icons.warning,
         };
       case RiskLevel.high:
+        return {
+          'text': 'HIGH GAS LEAKAGE',
+          'color': AppColors.danger,
+          'icon': Icons.gas_meter,
+        };
       case RiskLevel.fire:
         return {
-          'text': 'CRITICAL',
+          'text': 'FIRE DETECTED',
           'color': AppColors.danger,
-          'icon': Icons.warning_amber,
+          'icon': Icons.local_fire_department,
         };
     }
   }
@@ -47,74 +100,127 @@ class DashboardScreen extends StatelessWidget {
         title: const Text('Operations Dashboard'),
         centerTitle: true,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications_outlined),
-            onPressed: () {},
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Center(
+              child: _buildLiveIndicator(),
+            ),
           ),
         ],
       ),
-      body: StreamBuilder<SensorData>(
-        stream: backend.watchCurrentSensorData(),
-        builder: (context, snapshot) {
-          final sensorData =
-              snapshot.data ?? LocalDataProvider.getCurrentSensorData();
-          final statusDisplay = _getStatusDisplay(sensorData);
+      body: _buildUnifiedDashboard(backend),
+    );
+  }
 
-          return RefreshIndicator(
-            onRefresh: () async {
+  /// Dashboard powered by both MQTT real-time data and Backend API
+  Widget _buildUnifiedDashboard(BackendService backend) {
+    return StreamBuilder<SensorData>(
+      stream: backend.watchCurrentSensorData(),
+      builder: (context, snapshot) {
+        // If MQTT data is available, parse it into SensorData
+        SensorData sensorData;
+        if (_hasMqttData) {
+          sensorData = SensorData.fromMap(_latestSensorData!);
+        } else {
+          sensorData = snapshot.data ?? LocalDataProvider.getCurrentSensorData();
+        }
+
+        final statusDisplay = _getStatusDisplay(sensorData);
+
+        return RefreshIndicator(
+          onRefresh: () async {
+            if (_useMqtt) {
+              await _setupMqtt();
+            } else {
               await backend.resetLocalData();
-            },
-            color: AppColors.primary,
-            backgroundColor: AppColors.surface,
-            child: SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 24,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (snapshot.hasError)
-                      _buildBackendError(context, backend.isRemoteBackend),
-                    _buildStatusBanner(context, statusDisplay),
-                    const SizedBox(height: 24),
-                    _buildSectionTitle(
-                      context,
-                      'Sensor readings',
-                      backend.isRemoteBackend
-                          ? backend.backendName
-                          : 'Local Data',
-                    ),
-                    const SizedBox(height: 16),
-                    _buildSensorGrid(sensorData),
-                    const SizedBox(height: 24),
-                    _buildSectionTitle(context, 'Risk assessment'),
-                    const SizedBox(height: 16),
-                    RiskCard(
-                      riskLevel: sensorData.riskLevel,
-                      isFireDetected: sensorData.riskLevel == RiskLevel.fire,
-                    ),
-                    const SizedBox(height: 24),
-                    _buildSectionTitle(context, 'Device status'),
-                    const SizedBox(height: 16),
-                    _buildDeviceStatus(context, sensorData),
-                    const SizedBox(height: 24),
-                    EmergencyButton(
-                      onPressed: () => _showEmergencyDialog(context, backend),
-                    ),
-                    const SizedBox(height: 24),
-                  ],
-                ),
+            }
+          },
+          color: AppColors.primary,
+          backgroundColor: AppColors.surface,
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (snapshot.hasError && !_hasMqttData)
+                    _buildBackendError(context, backend.isRemoteBackend),
+                  _buildStatusBanner(context, statusDisplay),
+                  const SizedBox(height: 24),
+                  _buildSectionTitle(context, 'Sensor readings'),
+                  const SizedBox(height: 16),
+                  _buildSensorGrid(sensorData),
+                  const SizedBox(height: 24),
+                  _buildSectionTitle(context, 'Risk assessment'),
+                  const SizedBox(height: 16),
+                  RiskCard(
+                    riskLevel: sensorData.riskLevel,
+                    isFireDetected: sensorData.riskLevel == RiskLevel.fire,
+                  ),
+                  const SizedBox(height: 24),
+                  EmergencyButton(
+                    onPressed: () => _showEmergencyDialog(context, backend),
+                  ),
+                  const SizedBox(height: 24),
+                ],
               ),
             ),
-          );
-        },
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildLiveIndicator() {
+    final isLive = _useMqtt ? (_mqttService?.isConnected ?? false) : true;
+    final color = isLive ? const Color(0xFF22C55E) : const Color(0xFFEF4444);
+    final text = isLive ? 'Live' : 'Offline';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: color.withValues(alpha: 0.3),
+          width: 1.5,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(
+              color: color,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: color.withValues(alpha: 0.4),
+                  blurRadius: 4,
+                  spreadRadius: 1,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            text,
+            style: TextStyle(
+              color: color,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.5,
+            ),
+          ),
+        ],
       ),
     );
   }
 
+  // Existing Backend dashboard helper methods
   Widget _buildBackendError(BuildContext context, bool isRemoteBackend) {
     return Container(
       width: double.infinity,
@@ -195,6 +301,46 @@ class DashboardScreen extends StatelessWidget {
     );
   }
 
+  Future<void> _showEmergencyDialog(
+    BuildContext context,
+    BackendService backend,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Call Emergency Services'),
+        content: const Text(
+          'Emergency contact will be called immediately. Confirm this action.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Confirm'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      await backend.requestEmergencyCall(source: 'dashboard_screen');
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Emergency services contacted.')),
+      );
+    } catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Emergency request failed: $error')),
+      );
+    }
+  }
+
   Widget _buildStatusMeta(Color color) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
@@ -253,6 +399,7 @@ class DashboardScreen extends StatelessWidget {
       crossAxisCount: 2,
       crossAxisSpacing: 16,
       mainAxisSpacing: 16,
+      childAspectRatio: 1.1,
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       children: [
@@ -304,161 +451,9 @@ class DashboardScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildDeviceStatus(BuildContext context, SensorData sensorData) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.border, width: 1),
-      ),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: _buildStatusItem(
-                  icon: sensorData.isConnected ? Icons.wifi : Icons.wifi_off,
-                  label: sensorData.isConnected ? 'Connected' : 'Offline',
-                  color: sensorData.isConnected
-                      ? AppColors.success
-                      : AppColors.danger,
-                  value: sensorData.isConnected ? 'Online' : 'No Signal',
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildStatusItem(
-                  icon: Icons.battery_full,
-                  label: 'Battery',
-                  color: AppColors.success,
-                  value: '${sensorData.batteryLevel.toStringAsFixed(0)}%',
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          const Divider(color: AppColors.border),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              const Icon(Icons.update, color: AppColors.info, size: 20),
-              const SizedBox(width: 12),
-              Text(
-                'Last Updated',
-                style: Theme.of(
-                  context,
-                ).textTheme.bodyMedium?.copyWith(color: AppColors.textMuted),
-              ),
-              const Spacer(),
-              Text(
-                _getLastUpdateTime(sensorData),
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: AppColors.info,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _getLastUpdateTime(SensorData sensorData) {
-    final diff = DateTime.now().difference(sensorData.lastUpdated);
-    if (diff.inSeconds < 60) {
-      return 'Just now';
-    } else if (diff.inMinutes < 60) {
-      return '${diff.inMinutes}m ago';
-    }
-    return '${diff.inHours}h ago';
-  }
-
-  Widget _buildStatusItem({
-    required IconData icon,
-    required String label,
-    required Color color,
-    required String value,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withValues(alpha: 0.3), width: 1),
-      ),
-      child: Column(
-        children: [
-          Icon(icon, color: color, size: 24),
-          const SizedBox(height: 8),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: color,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w500,
-              color: color.withValues(alpha: 0.8),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showEmergencyDialog(BuildContext context, BackendService backend) {
-    showDialog(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        title: const Text(
-          'Emergency Call',
-          style: TextStyle(
-            color: AppColors.warning,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        content: const Text(
-          'Initiating emergency call to the registered emergency number.',
-          style: TextStyle(color: AppColors.textSecondary),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text(
-              'Cancel',
-              style: TextStyle(color: AppColors.textMuted),
-            ),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
-            onPressed: () async {
-              Navigator.pop(dialogContext);
-              await backend.requestEmergencyCall(source: 'dashboard');
-              if (!context.mounted) {
-                return;
-              }
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Emergency call initiated!'),
-                  backgroundColor: AppColors.danger,
-                ),
-              );
-            },
-            child: const Text('CALL NOW'),
-          ),
-        ],
-      ),
-    );
+  @override
+  void dispose() {
+    _mqttService?.disconnect();
+    super.dispose();
   }
 }

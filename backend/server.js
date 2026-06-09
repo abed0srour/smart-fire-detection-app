@@ -18,12 +18,14 @@ const safetyTipRoutes = require("./routes/safetyTipRoutes");
 const maintenanceRoutes = require("./routes/maintenanceRoutes");
 const dashboardRoutes = require("./routes/dashboardRoutes");
 const { initializeSocket } = require("./realtime/socket");
+const { initializeMqttBridge } = require("./mqttBridge");
 
 const app = express();
 const server = http.createServer(app);
 
 connectDB();
 initializeSocket(server);
+initializeMqttBridge();
 
 app.disable("etag");
 app.use(cors());

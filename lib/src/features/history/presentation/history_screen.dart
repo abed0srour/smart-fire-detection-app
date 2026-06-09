@@ -104,102 +104,186 @@ class HistoryScreen extends StatelessWidget {
 
   Widget _buildAlertItem(BuildContext context, AlertHistory alert) {
     final riskColor = _getRiskColor(alert.riskLevel);
+    
+    // Choose status icon based on risk level
+    IconData statusIcon;
+    Color statusIconColor;
+    switch (alert.riskLevel) {
+      case RiskLevel.low:
+        statusIcon = Icons.shield_outlined;
+        statusIconColor = AppColors.success;
+        break;
+      case RiskLevel.medium:
+        statusIcon = Icons.warning_amber_rounded;
+        statusIconColor = AppColors.warning;
+        break;
+      case RiskLevel.high:
+        statusIcon = Icons.error_outline_rounded;
+        statusIconColor = Colors.deepOrange;
+        break;
+      case RiskLevel.fire:
+        statusIcon = Icons.local_fire_department_rounded;
+        statusIconColor = AppColors.danger;
+        break;
+    }
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border(left: BorderSide(color: riskColor, width: 4)),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border, width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.2),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () => _showAlertDetails(context, alert),
-          borderRadius: BorderRadius.circular(8),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            alert.status,
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.textPrimary,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            _formatDate(alert.timestamp),
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: AppColors.textMuted,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: riskColor.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: riskColor, width: 1),
-                      ),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 6,
-                      ),
-                      child: Text(
-                        alert.riskLevel.displayLabel,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: riskColor,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    _buildSensorChip(
-                      icon: Icons.thermostat,
-                      color: AppColors.info,
-                      value: '${alert.temperature.toStringAsFixed(1)}\u00B0C',
-                    ),
-                    const SizedBox(width: 8),
-                    _buildSensorChip(
-                      icon: Icons.cloud,
-                      color: AppColors.textSecondary,
-                      value: '${alert.smokeLevel.toStringAsFixed(1)} ppm',
-                    ),
-                    const SizedBox(width: 8),
-                    _buildSensorChip(
-                      icon: Icons.science,
-                      color: const Color(0xFFA78BFA),
-                      value: '${alert.coLevel.toStringAsFixed(1)} ppm',
-                    ),
-                    const SizedBox(width: 8),
-                    _buildSensorChip(
-                      icon: Icons.light_mode,
-                      color: AppColors.warning,
-                      value: '${alert.lightLevel.toStringAsFixed(0)} lux',
-                    ),
-                  ],
-                ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          decoration: BoxDecoration(
+            // Subtle left accent bar
+            border: Border(left: BorderSide(color: riskColor, width: 6)),
+            // Subtle gradient matching risk level
+            gradient: LinearGradient(
+              colors: [
+                riskColor.withValues(alpha: 0.03),
+                Colors.transparent,
               ],
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+            ),
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () => _showAlertDetails(context, alert),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Header Row: Icon, Status & Date, Risk Badge, Chevron
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        // Status Icon Container
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: statusIconColor.withValues(alpha: 0.1),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            statusIcon,
+                            color: statusIconColor,
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        // Status Text and Timestamp
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                alert.status,
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                _formatDate(alert.timestamp),
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: AppColors.textMuted,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        // Risk Level Badge
+                        Container(
+                          decoration: BoxDecoration(
+                            color: riskColor.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: riskColor.withValues(alpha: 0.3), width: 1),
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
+                          child: Text(
+                            alert.riskLevel.displayLabel.toUpperCase(),
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                              color: riskColor,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        const Icon(
+                          Icons.chevron_right_rounded,
+                          color: AppColors.textMuted,
+                          size: 20,
+                        ),
+                      ],
+                    ),
+                    
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      child: Divider(
+                        color: AppColors.border,
+                        height: 1,
+                        thickness: 0.5,
+                      ),
+                    ),
+                    
+                    // Sensor Readings Wrap
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _buildSensorChip(
+                          icon: Icons.thermostat,
+                          color: AppColors.info,
+                          value: '${alert.temperature.toStringAsFixed(1)}\u00B0C',
+                        ),
+                        _buildSensorChip(
+                          icon: Icons.cloud,
+                          color: AppColors.textSecondary,
+                          value: '${alert.smokeLevel.toStringAsFixed(1)} ppm',
+                        ),
+                        _buildSensorChip(
+                          icon: Icons.science,
+                          color: const Color(0xFFA78BFA),
+                          value: '${alert.coLevel.toStringAsFixed(1)} ppm',
+                        ),
+                        _buildSensorChip(
+                          icon: Icons.light_mode,
+                          color: AppColors.warning,
+                          value: '${alert.lightLevel.toStringAsFixed(0)} lux',
+                        ),
+                        if (alert.flameDetected)
+                          _buildSensorChip(
+                            icon: Icons.local_fire_department,
+                            color: AppColors.danger,
+                            value: 'Flame',
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
         ),
@@ -212,28 +296,27 @@ class HistoryScreen extends StatelessWidget {
     required Color color,
     required String value,
   }) {
-    return Expanded(
-      child: Container(
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(6),
-        ),
-        padding: const EdgeInsets.all(8),
-        child: Column(
-          children: [
-            Icon(icon, color: color, size: 20),
-            const SizedBox(height: 4),
-            Text(
-              value,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: color,
-              ),
+    return Container(
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withValues(alpha: 0.18), width: 1),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: color, size: 16),
+          const SizedBox(width: 6),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: color,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
