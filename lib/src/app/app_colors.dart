@@ -3,18 +3,18 @@ import 'package:flutter/material.dart';
 class AppColors {
   const AppColors._();
 
-  static const background = Color(0xFF090B0F);
-  static const surface = Color(0xFF11161D);
-  static const surfaceHigh = Color(0xFF17202A);
-  static const surfaceHighest = Color(0xFF202B37);
-  static const border = Color(0xFF2A3542);
-  static const primary = Color(0xFFFF7A1A);
-  static const primaryMuted = Color(0xFF3A2416);
-  static const info = Color(0xFF38BDF8);
-  static const success = Color(0xFF22C55E);
-  static const warning = Color(0xFFF59E0B);
-  static const danger = Color(0xFFEF4444);
+  static const background = Color(0xFF070A13);
+  static const surface = Color(0xFF0F1626);
+  static const surfaceHigh = Color(0xFF1E293B);
+  static const surfaceHighest = Color(0xFF334155);
+  static const border = Color(0xFF1F293D);
+  static const primary = Color(0xFFFF6B00); // Premium neon-ish safety orange
+  static const primaryMuted = Color(0xFF3B1E0A);
+  static const info = Color(0xFF0EA5E9);     // Premium sky blue
+  static const success = Color(0xFF10B981);  // Emerald green
+  static const warning = Color(0xFFF59E0B);  // Amber warning
+  static const danger = Color(0xFFF43F5E);   // Crimson/Rose red
   static const textPrimary = Color(0xFFF8FAFC);
   static const textSecondary = Color(0xFFCBD5E1);
-  static const textMuted = Color(0xFF94A3B8);
+  static const textMuted = Color(0xFF64748B);
 }

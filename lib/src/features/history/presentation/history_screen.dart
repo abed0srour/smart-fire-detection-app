@@ -130,28 +130,27 @@ class HistoryScreen extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.border, width: 1),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.2),
-            blurRadius: 8,
+            color: Colors.black.withValues(alpha: 0.15),
+            blurRadius: 10,
             offset: const Offset(0, 4),
           ),
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         child: Container(
           decoration: BoxDecoration(
             // Subtle left accent bar
-            border: Border(left: BorderSide(color: riskColor, width: 6)),
+            border: Border(left: BorderSide(color: riskColor, width: 5)),
             // Subtle gradient matching risk level
             gradient: LinearGradient(
               colors: [
-                riskColor.withValues(alpha: 0.03),
-                Colors.transparent,
+                riskColor.withValues(alpha: 0.04),
+                AppColors.surface,
               ],
               begin: Alignment.centerLeft,
               end: Alignment.centerRight,
@@ -340,7 +339,7 @@ class HistoryScreen extends StatelessWidget {
       context: context,
       backgroundColor: AppColors.surface,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(8)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) => Padding(
         padding: const EdgeInsets.all(24),
@@ -404,7 +403,7 @@ class HistoryScreen extends StatelessWidget {
                   backgroundColor: AppColors.primary,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                 ),
                 child: const Text(

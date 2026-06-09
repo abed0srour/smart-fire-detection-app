@@ -159,56 +159,76 @@ class _AlertScreenState extends State<AlertScreen>
     return AnimatedBuilder(
       animation: _pulseController,
       builder: (context, child) {
-        return Transform.scale(
-          scale: 1.0 + (0.1 * _pulseController.value),
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              Container(
-                width: 160,
-                height: 160,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: color.withValues(
-                      alpha: 0.5 - (0.3 * _pulseController.value),
-                    ),
-                    width: 3,
-                  ),
+        final double pulse = _pulseController.value;
+        return Stack(
+          alignment: Alignment.center,
+          children: [
+            // Outermost pulsing ring
+            Container(
+              width: 180 + (40 * pulse),
+              height: 180 + (40 * pulse),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: color.withValues(alpha: 0.08 * (1.0 - pulse)),
+                border: Border.all(
+                  color: color.withValues(alpha: 0.25 * (1.0 - pulse)),
+                  width: 1.5,
                 ),
               ),
-              Container(
-                width: 120,
-                height: 120,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: color.withValues(
-                      alpha: 0.3 - (0.2 * _pulseController.value),
-                    ),
-                    width: 2,
-                  ),
+            ),
+            // Middle pulsing ring
+            Container(
+              width: 130 + (30 * pulse),
+              height: 130 + (30 * pulse),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: color.withValues(alpha: 0.12 * (1.0 - pulse)),
+                border: Border.all(
+                  color: color.withValues(alpha: 0.35 * (1.0 - pulse)),
+                  width: 2,
                 ),
               ),
-              Icon(icon, size: 80, color: color),
-            ],
-          ),
+            ),
+            // Core breathing circle
+            Container(
+              width: 100,
+              height: 100,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: color.withValues(alpha: 0.15),
+                boxShadow: [
+                  BoxShadow(
+                    color: color.withValues(alpha: 0.3),
+                    blurRadius: 20 + (10 * pulse),
+                    spreadRadius: 2 + (2 * pulse),
+                  ),
+                ],
+              ),
+              child: Icon(icon, size: 52, color: color),
+            ),
+          ],
         );
       },
     );
   }
 
   Widget _buildSensorReadings(SensorData sensorData, bool isCritical) {
+    final borderThemeColor = isCritical ? AppColors.danger : AppColors.warning;
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: (isCritical ? AppColors.danger : AppColors.warning).withValues(
-            alpha: 0.5,
-          ),
-          width: 2,
+          color: borderThemeColor.withValues(alpha: 0.3),
+          width: 1.5,
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.15),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -277,51 +297,69 @@ class _AlertScreenState extends State<AlertScreen>
   Widget _buildSafetyTips({required bool isGasLeakage}) {
     final color = isGasLeakage ? AppColors.danger : AppColors.warning;
     final title = isGasLeakage ? 'GAS LEAK SAFETY' : 'SAFETY TIPS';
-    final tips = isGasLeakage
-        ? '- Avoid flames and electrical switches\n'
-              '- Ventilate the area if safe\n'
-              '- Shut off the gas source if accessible\n'
-              '- Leave the area\n'
-              '- Contact emergency services'
-        : '- Evacuate the building immediately\n'
-              '- Use stairs, not elevators\n'
-              '- Help others if possible\n'
-              '- Close doors behind you\n'
-              '- Meet at assembly point';
+    final tipsList = isGasLeakage
+        ? [
+            'Avoid flames and electrical switches',
+            'Ventilate the area if safe to do so',
+            'Shut off the gas source if accessible',
+            'Leave the area immediately',
+            'Contact emergency services'
+          ]
+        : [
+            'Evacuate the building immediately',
+            'Use stairs, do not use elevators',
+            'Help others to safety if possible',
+            'Close doors behind you to contain fire',
+            'Meet at designated assembly point'
+          ];
 
     return Container(
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color, width: 1),
+        color: color.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withValues(alpha: 0.3), width: 1),
       ),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(Icons.lightbulb, color: color, size: 20),
+              Icon(Icons.lightbulb_outline, color: color, size: 20),
               const SizedBox(width: 8),
               Text(
                 title,
                 style: TextStyle(
                   fontSize: 12,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w800,
                   color: color,
+                  letterSpacing: 0.8,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          Text(
-            tips,
-            style: const TextStyle(
-              fontSize: 13,
-              height: 1.6,
-              color: AppColors.textSecondary,
-            ),
-          ),
+          const SizedBox(height: 16),
+          ...tipsList.map((tip) => Padding(
+                padding: const EdgeInsets.only(bottom: 10.0),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.check_circle_outline_rounded,
+                        color: color.withValues(alpha: 0.7), size: 16),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        tip,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: AppColors.textSecondary,
+                          height: 1.35,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              )),
         ],
       ),
     );
@@ -334,27 +372,47 @@ class _AlertScreenState extends State<AlertScreen>
   ) {
     return Column(
       children: [
-        SizedBox(
-          width: double.infinity,
+        Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.danger.withValues(alpha: 0.3),
+                blurRadius: 16,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
           child: ElevatedButton.icon(
             onPressed: () => _showCallConfirmation(context, backend),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.danger,
-              padding: const EdgeInsets.symmetric(vertical: 16),
+              foregroundColor: Colors.white,
+              minimumSize: const Size.fromHeight(56),
+              elevation: 0,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(14),
               ),
             ),
-            icon: const Icon(Icons.phone, size: 24),
+            icon: const Icon(Icons.phone, size: 20),
             label: const Text(
               'CALL EMERGENCY SERVICES',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, letterSpacing: 0.5),
             ),
           ),
         ),
-        const SizedBox(height: 12),
-        SizedBox(
-          width: double.infinity,
+        const SizedBox(height: 16),
+        Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: [
+              BoxShadow(
+                color: (isMuted ? AppColors.textMuted : Colors.deepOrange).withValues(alpha: 0.25),
+                blurRadius: 16,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
           child: ElevatedButton.icon(
             onPressed: () async {
               final muted = !isMuted;
@@ -373,18 +431,18 @@ class _AlertScreenState extends State<AlertScreen>
               );
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: isMuted
-                  ? AppColors.textMuted
-                  : Colors.deepOrange,
-              padding: const EdgeInsets.symmetric(vertical: 16),
+              backgroundColor: isMuted ? AppColors.surfaceHigh : Colors.deepOrange,
+              foregroundColor: Colors.white,
+              minimumSize: const Size.fromHeight(56),
+              elevation: 0,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(14),
               ),
             ),
-            icon: Icon(isMuted ? Icons.volume_off : Icons.volume_up, size: 24),
+            icon: Icon(isMuted ? Icons.volume_off : Icons.volume_up, size: 20),
             label: Text(
               isMuted ? 'UNMUTE ALARM' : 'MUTE ALARM',
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, letterSpacing: 0.5),
             ),
           ),
         ),
@@ -397,7 +455,7 @@ class _AlertScreenState extends State<AlertScreen>
       context: context,
       builder: (dialogContext) => AlertDialog(
         backgroundColor: AppColors.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text(
           'Call Emergency Services',
           style: TextStyle(
@@ -418,7 +476,10 @@ class _AlertScreenState extends State<AlertScreen>
             ),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.danger,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
             onPressed: () async {
               Navigator.pop(dialogContext);
               await backend.requestEmergencyCall(source: 'alert_screen');

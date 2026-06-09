@@ -55,7 +55,7 @@ class _AuthScreenState extends State<AuthScreen> {
                   child: DecoratedBox(
                     decoration: BoxDecoration(
                       color: AppColors.surface,
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(20),
                       border: Border.all(color: AppColors.border),
                       boxShadow: [
                         BoxShadow(
@@ -66,7 +66,7 @@ class _AuthScreenState extends State<AuthScreen> {
                       ],
                     ),
                     child: ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(20),
                       child: isWide
                           ? SizedBox(
                               height: _isSignUp ? 700 : 560,
@@ -97,7 +97,17 @@ class _AuthScreenState extends State<AuthScreen> {
 
   Widget _buildBrandPanel(BuildContext context) {
     return Container(
-      color: AppColors.surfaceHigh,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            AppColors.surface,
+            AppColors.primary.withValues(alpha: 0.06),
+          ],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+        ),
+        border: const Border(right: BorderSide(color: AppColors.border)),
+      ),
       padding: const EdgeInsets.all(32),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -156,7 +166,7 @@ class _AuthScreenState extends State<AuthScreen> {
           height: 42,
           decoration: BoxDecoration(
             color: color.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(12),
           ),
           child: Icon(icon, color: color, size: 22),
         ),
@@ -285,10 +295,29 @@ class _AuthScreenState extends State<AuthScreen> {
                     ),
             ),
             const SizedBox(height: 24),
-            SizedBox(
-              height: 52,
+            Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primary.withValues(alpha: 0.3),
+                    blurRadius: 16,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              height: 56,
               child: ElevatedButton.icon(
                 onPressed: auth.isLoading ? null : _submit,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, letterSpacing: 0.5),
+                ),
                 icon: auth.isLoading
                     ? const SizedBox(
                         width: 18,
@@ -393,7 +422,7 @@ class _AuthScreenState extends State<AuthScreen> {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppColors.danger.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.danger.withValues(alpha: 0.45)),
       ),
       child: Row(

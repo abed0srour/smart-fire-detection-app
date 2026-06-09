@@ -16,64 +16,95 @@ class RiskCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final details = _RiskDetails.fromLevel(riskLevel);
 
+    final isDanger = riskLevel == RiskLevel.high || riskLevel == RiskLevel.fire;
+
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: details.color.withValues(alpha: 0.45)),
+        gradient: LinearGradient(
+          colors: [
+            AppColors.surface,
+            details.color.withValues(alpha: 0.06),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: details.color.withValues(alpha: isDanger ? 0.6 : 0.3),
+          width: isDanger ? 1.5 : 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.12),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+          if (isDanger)
+            BoxShadow(
+              color: details.color.withValues(alpha: 0.08),
+              blurRadius: 16,
+              spreadRadius: 1,
+            ),
+        ],
       ),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
       child: Row(
         children: [
           Container(
-            width: 48,
-            height: 48,
+            width: 52,
+            height: 52,
             decoration: BoxDecoration(
               color: details.color.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: details.color.withValues(alpha: 0.24)),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: details.color.withValues(alpha: 0.25),
+                width: 1,
+              ),
             ),
             child: TweenAnimationBuilder<double>(
-              tween: Tween(begin: 1, end: isFireDetected ? 1.12 : 1),
-              duration: const Duration(milliseconds: 700),
+              tween: Tween(begin: 1.0, end: isFireDetected ? 1.15 : 1.0),
+              duration: const Duration(milliseconds: 600),
               curve: Curves.easeInOut,
               builder: (context, scale, child) {
                 return Transform.scale(scale: scale, child: child);
               },
-              child: Icon(details.icon, color: details.color, size: 26),
+              child: Icon(details.icon, color: details.color, size: 28),
             ),
           ),
-          const SizedBox(width: 14),
+          const SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Risk assessment',
-                  style: TextStyle(
+                Text(
+                  'Risk assessment'.toUpperCase(),
+                  style: const TextStyle(
                     color: AppColors.textMuted,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.0,
                   ),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 4),
                 Text(
                   details.label,
                   style: TextStyle(
                     color: details.color,
                     fontSize: 20,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0.3,
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 3),
                 Text(
                   details.description,
-                  maxLines: 1,
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: AppColors.textSecondary,
-                    fontSize: 13,
+                    fontSize: 12,
                     fontWeight: FontWeight.w500,
+                    height: 1.35,
                   ),
                 ),
               ],

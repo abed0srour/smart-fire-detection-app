@@ -135,12 +135,37 @@ class _RoomsScreenState extends State<RoomsScreen> {
         .where((device) => device.isOnline)
         .length;
 
+    final isDanger = room.riskLevel == RiskLevel.high || room.riskLevel == RiskLevel.fire;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withValues(alpha: 0.35), width: 1),
+        gradient: LinearGradient(
+          colors: [
+            AppColors.surface,
+            color.withValues(alpha: 0.05),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: color.withValues(alpha: isDanger ? 0.6 : 0.35),
+          width: isDanger ? 1.5 : 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.15),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+          if (isDanger)
+            BoxShadow(
+              color: color.withValues(alpha: 0.08),
+              blurRadius: 16,
+              spreadRadius: 1,
+            ),
+        ],
       ),
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -218,15 +243,13 @@ class _RoomsScreenState extends State<RoomsScreen> {
         onPressed: () => _showManageRoomDialog(backend, room),
         style: OutlinedButton.styleFrom(
           foregroundColor: AppColors.primary,
-          side: BorderSide(color: AppColors.primary.withValues(alpha: 0.55)),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          side: BorderSide(color: AppColors.primary.withValues(alpha: 0.45)),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.5),
         ),
-        icon: const Icon(Icons.tune, size: 18),
-        label: const Text(
-          'MANAGE ROOM',
-          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
-        ),
+        icon: const Icon(Icons.tune, size: 16),
+        label: const Text('MANAGE ROOM'),
       ),
     );
   }
@@ -264,9 +287,9 @@ class _RoomsScreenState extends State<RoomsScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withValues(alpha: 0.24), width: 1),
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.2), width: 1),
       ),
       child: Row(
         children: [
@@ -422,10 +445,10 @@ class _RoomsScreenState extends State<RoomsScreen> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: metric.color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(8),
+        color: metric.color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: metric.color.withValues(alpha: 0.22),
+          color: metric.color.withValues(alpha: 0.2),
           width: 1,
         ),
       ),
@@ -511,8 +534,9 @@ class _RoomsScreenState extends State<RoomsScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
-        color: AppColors.surfaceHigh,
-        borderRadius: BorderRadius.circular(8),
+        color: AppColors.surfaceHigh.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -604,7 +628,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
             return AlertDialog(
               backgroundColor: AppColors.surface,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(16),
               ),
               title: Row(
                 children: [
@@ -806,7 +830,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
           builder: (dialogContext) => AlertDialog(
             backgroundColor: AppColors.surface,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(16),
             ),
             title: const Text(
               'Delete Room',
@@ -843,9 +867,9 @@ class _RoomsScreenState extends State<RoomsScreen> {
       width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppColors.surfaceHigh,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.border),
+        color: AppColors.surfaceHigh.withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
       ),
       child: const Text(
         'No devices attached',
@@ -860,9 +884,9 @@ class _RoomsScreenState extends State<RoomsScreen> {
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppColors.surfaceHigh,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.border),
+        color: AppColors.surfaceHigh.withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
       ),
       child: Row(
         children: [

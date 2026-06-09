@@ -174,16 +174,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildLiveIndicator() {
     final isLive = _useMqtt ? (_mqttService?.isConnected ?? false) : true;
-    final color = isLive ? const Color(0xFF22C55E) : const Color(0xFFEF4444);
+    final color = isLive ? AppColors.success : AppColors.danger;
     final text = isLive ? 'Live' : 'Offline';
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
+        color: color.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: color.withValues(alpha: 0.3),
+          color: color.withValues(alpha: 0.25),
           width: 1.5,
         ),
       ),
@@ -191,28 +191,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 8,
-            height: 8,
+            width: 7,
+            height: 7,
             decoration: BoxDecoration(
               color: color,
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: color.withValues(alpha: 0.4),
-                  blurRadius: 4,
-                  spreadRadius: 1,
+                  color: color.withValues(alpha: 0.5),
+                  blurRadius: 6,
+                  spreadRadius: 1.5,
                 ),
               ],
             ),
           ),
           const SizedBox(width: 6),
           Text(
-            text,
+            text.toUpperCase(),
             style: TextStyle(
               color: color,
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.5,
+              fontSize: 10,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.6,
             ),
           ),
         ],
@@ -227,10 +227,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.danger.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(8),
+        color: AppColors.danger.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: AppColors.danger.withValues(alpha: 0.4),
+          color: AppColors.danger.withValues(alpha: 0.3),
           width: 1,
         ),
       ),
@@ -248,23 +248,52 @@ class _DashboardScreenState extends State<DashboardScreen> {
     Map<String, dynamic> statusDisplay,
   ) {
     final color = statusDisplay['color'] as Color;
+    final isDanger = statusDisplay['text'] == 'FIRE DETECTED' || statusDisplay['text'] == 'HIGH GAS LEAKAGE';
+    
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withValues(alpha: 0.45), width: 1),
+        gradient: LinearGradient(
+          colors: [
+            AppColors.surface,
+            color.withValues(alpha: 0.05),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: color.withValues(alpha: isDanger ? 0.6 : 0.3), 
+          width: isDanger ? 1.5 : 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.15),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+          if (isDanger)
+            BoxShadow(
+              color: color.withValues(alpha: 0.08),
+              blurRadius: 16,
+              spreadRadius: 1,
+            ),
+        ],
       ),
       padding: const EdgeInsets.all(16),
       child: Row(
         children: [
           Container(
-            width: 48,
-            height: 48,
+            width: 52,
+            height: 52,
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: color.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: color.withValues(alpha: 0.25),
+                width: 1,
+              ),
             ),
             child: Icon(
               statusDisplay['icon'] as IconData,
@@ -278,18 +307,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'System status',
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  'SYSTEM STATUS',
+                  style: TextStyle(
                     color: AppColors.textMuted,
-                    fontWeight: FontWeight.w600,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.0,
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 3),
                 Text(
                   statusDisplay['text'] as String,
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  style: TextStyle(
                     color: color,
-                    fontWeight: FontWeight.w800,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0.3,
                   ),
                 ),
               ],
@@ -399,7 +432,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       crossAxisCount: 2,
       crossAxisSpacing: 16,
       mainAxisSpacing: 16,
-      childAspectRatio: 1.1,
+      childAspectRatio: 0.95,
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       children: [
